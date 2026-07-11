@@ -1,0 +1,254 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfAZ9hiA.woff2') format('woff2');
+}
+
+:root,
+.theme-light {
+  /* === 设计系统 - Light 模式 === */
+  --bg-page: #FAFAFA;
+  --bg-surface: #FFFFFF;
+  --bg-surface-hover: #F5F5F5;
+  --bg-surface-active: rgba(99, 102, 241, 0.08);
+  --border-subtle: #E8E8EC;
+  --border-focus: #6366F1;
+
+  --text-primary: #0A0A0A;
+  --text-secondary: #6B6B6B;
+  --text-tertiary: #9C9C9C;
+
+  --accent-primary: #6366F1;
+  --accent-primary-hover: #4F46E5;
+  --accent-secondary: #20970B;
+  --accent-warning: #F59E0B;
+  --accent-error: #EF4444;
+
+  --status-bg-success: rgba(32, 151, 11, 0.10);
+  --status-bg-info: rgba(99, 102, 241, 0.10);
+  --status-bg-warning: rgba(245, 158, 11, 0.10);
+  --status-bg-error: rgba(239, 68, 68, 0.10);
+
+  /* 图表 */
+  --chart-sales: #6366F1;
+  --chart-demand: #20970B;
+  --chart-inventory: #F59E0B;
+  --chart-forecast: #9333EA;
+  --chart-grid: rgba(0, 0, 0, 0.05);
+  --chart-axis-text: #6B6B6B;
+
+  /* 阴影与 elevation */
+  --shadow-card-hover: 0 8px 30px rgba(0, 0, 0, 0.08);
+  --shadow-button-glow: 0 4px 12px rgba(99, 102, 241, 0.35);
+  --shadow-dropdown: 0 10px 40px rgba(0, 0, 0, 0.12);
+  --focus-ring: 0 0 0 3px rgba(99, 102, 241, 0.12);
+
+  /* 圆角 */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+
+  /* shadcn HSL - Light */
+  --background: 0 0% 98%;
+  --foreground: 0 0% 4%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 4%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 4%;
+  --primary: 239 84% 67%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 96%;
+  --secondary-foreground: 0 0% 4%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 42%;
+  --accent: 0 0% 96%;
+  --accent-foreground: 0 0% 4%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 240 6% 90%;
+  --input: 240 6% 90%;
+  --ring: 239 84% 67%;
+  --radius: 0.5rem;
+
+  --sidebar-background: 0 0% 98%;
+  --sidebar-foreground: 240 5% 26%;
+  --sidebar-primary: 239 84% 67%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 0 0% 96%;
+  --sidebar-accent-foreground: 0 0% 4%;
+  --sidebar-border: 240 6% 90%;
+  --sidebar-ring: 239 84% 67%;
+
+  color-scheme: light;
+}
+
+.theme-dark {
+  /* === 设计系统 - Dark 模式 === */
+  --bg-page: #121212;
+  --bg-surface: #1E1E1E;
+  --bg-surface-hover: #2A2A2A;
+  --bg-surface-active: rgba(0, 229, 255, 0.10);
+  --border-subtle: #2C2C2E;
+  --border-focus: #00E5FF;
+
+  --text-primary: #FFFFFF;
+  --text-secondary: #98989D;
+  --text-tertiary: #636366;
+
+  --accent-primary: #00E5FF;
+  --accent-primary-hover: #80F0FF;
+  --accent-secondary: #32D74B;
+  --accent-warning: #FF9500;
+  --accent-error: #FF453A;
+
+  --status-bg-success: rgba(50, 215, 75, 0.10);
+  --status-bg-info: rgba(0, 229, 255, 0.10);
+  --status-bg-warning: rgba(255, 149, 0, 0.10);
+  --status-bg-error: rgba(255, 69, 58, 0.10);
+
+  /* 图表 */
+  --chart-sales: #00E5FF;
+  --chart-demand: #32D74B;
+  --chart-inventory: #FF9500;
+  --chart-forecast: #BF5AF2;
+  --chart-grid: rgba(255, 255, 255, 0.05);
+  --chart-axis-text: #98989D;
+
+  /* 阴影与 elevation */
+  --shadow-card-hover: 0 8px 30px rgba(0, 0, 0, 0.25);
+  --shadow-button-glow: 0 4px 12px rgba(0, 229, 255, 0.35);
+  --shadow-dropdown: 0 10px 40px rgba(0, 0, 0, 0.40);
+  --focus-ring: 0 0 0 3px rgba(0, 229, 255, 0.20);
+
+  /* shadcn HSL - Dark */
+  --background: 0 0% 7%;
+  --foreground: 0 0% 100%;
+  --card: 0 0% 12%;
+  --card-foreground: 0 0% 100%;
+  --popover: 0 0% 12%;
+  --popover-foreground: 0 0% 100%;
+  --primary: 186 100% 50%;
+  --primary-foreground: 0 0% 7%;
+  --secondary: 0 0% 16%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 0 0% 16%;
+  --muted-foreground: 240 5% 65%;
+  --accent: 0 0% 16%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 3 100% 62%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 240 4% 16%;
+  --input: 240 4% 16%;
+  --ring: 186 100% 50%;
+  --radius: 0.5rem;
+
+  --sidebar-background: 0 0% 10%;
+  --sidebar-foreground: 0 0% 100%;
+  --sidebar-primary: 186 100% 50%;
+  --sidebar-primary-foreground: 0 0% 7%;
+  --sidebar-accent: 0 0% 16%;
+  --sidebar-accent-foreground: 0 0% 100%;
+  --sidebar-border: 240 4% 16%;
+  --sidebar-ring: 186 100% 50%;
+
+  color-scheme: dark;
+}
+
+/* === 向后兼容别名：让现有页面无需重写 === */
+:root,
+.theme-light,
+.theme-dark {
+  --bg-primary: var(--bg-page);
+  --bg-secondary: var(--bg-page);
+  --card-surface: var(--bg-surface);
+  --card-hover: var(--bg-surface-hover);
+  --border-color: var(--border-subtle);
+  --accent-alert: var(--accent-error);
+  --accent-purple: var(--chart-forecast);
+  --status-sufficient-bg: var(--status-bg-success);
+  --status-normal-bg: var(--status-bg-info);
+  --status-low-bg: var(--status-bg-warning);
+  --status-critical-bg: var(--status-bg-error);
+  --table-row-hover: rgba(99, 102, 241, 0.04);
+}
+
+.theme-dark {
+  --table-row-hover: rgba(255, 255, 255, 0.03);
+}
+
+/* === 全局样式 === */
+* {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+html,
+body,
+#root {
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  min-height: 100vh;
+}
+
+/* 主题过渡动画（设计系统：250ms ease-in-out） */
+* {
+  transition: background-color 250ms ease-in-out,
+              border-color 250ms ease-in-out,
+              color 250ms ease-in-out,
+              fill 250ms ease-in-out,
+              stroke 250ms ease-in-out,
+              box-shadow 250ms ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-page);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-tertiary);
+}
+
+/* select 样式 */
+select {
+  background-color: var(--bg-surface) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-subtle) !important;
+}
+select option {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
