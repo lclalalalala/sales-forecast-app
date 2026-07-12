@@ -7,7 +7,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
-  BarChart3, Package, TrendingUp, Store, Menu, HelpCircle, X,
+  BarChart3, Package, TrendingUp, Store, Menu, HelpCircle, X, Trophy, FileText,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -28,6 +28,8 @@ const navItems = [
   { path: '/', label: '数据概览', icon: BarChart3 },
   { path: '/replenishment', label: '补货建议', icon: Package },
   { path: `/products/${DEFAULT_PRODUCT_ID}`, label: '商品分析', icon: TrendingUp },
+  { path: '/rankings', label: '排名', icon: Trophy },
+  { path: '/tech-doc', label: '技术文档', icon: FileText },
 ];
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
