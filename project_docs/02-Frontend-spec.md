@@ -957,8 +957,10 @@ app/src/
 ├── state/
 │   └── analysisContext.tsx      # 全局筛选状态，持久化到 sessionStorage
 ├── lib/
-│   ├── utils.ts
-│   └── mockData.ts              # 前端 Mock 数据/提交逻辑（可选）
+│   ├── utils.ts                # cn() 等通用工具
+│   ├── errors.ts               # isAbortError() / getErrorMessage() 类型守卫
+│   ├── constants.ts            # 跨文件共享的魔法字符串与数字
+│   └── format.ts               # formatInt() / formatDecimal() / formatLocalDate() 格式化工具
 ├── types/
 │   ├── api.ts
 │   ├── sales.ts
@@ -1176,4 +1178,28 @@ cd app && npm run lint    # 0 errors, 0 warnings
 cd app && npm run build   # 通过，无 TypeScript 错误
 cd app && npm run test    # 7 个测试文件，24 条用例全部通过
 cd app && npm run lint    # 0 errors, 0 warnings
+```
+
+## 第三轮代码审查修复（2026-07-13）
+
+依据 `project_docs/dev_guide/frontend-dev-guide.md` 五类原则对 `app/src/` 复审，修复 3 项与指南冲突的问题。
+
+### High — 正确性
+
+- **H1 日期时区 off-by-one**：`OrderForm.tsx`、`DashboardPage.tsx` 原用 `date.toISOString().slice(0,10)` 格式化本地日期，在东八区等时区会转 UTC 后回退一天（违反"防御性编程"）。新建 `lib/format.ts` 提供 `formatLocalDate()`，按本地年月日拼接；`OrderForm` 到货日期、`DashboardPage.computeSelectedStart()` 均改用之（后者与已有本地 `parseDate` 对齐，消除比较口径不一致）。
+
+### Medium — 健壮性与单向数据流
+
+- **M1 移除"读 DOM 反推数据"的行点击**：`DashboardPage.tsx` 曾用事件委托从 `link.getAttribute('href')` 取 `productId`，`RankingPage.tsx` 更以 `link.textContent` 当 ID —— 把渲染文本当数据源，脆弱且违反"单向数据流"。改为将 `onProductClick(productId)` 作为 prop 逐层下传，在 `<Link onClick>` 显式调用（对齐 `ReplenishmentPage` 既有范式）；`DashboardPage` 的 `rankColumns` 相应改为 `createRankColumns(onProductClick)` 工厂并在组件内 `useMemo` 缓存。
+
+### Low — 代码质量（DRY）
+
+- **L1 格式化工具去重**：`fmt`/`f1`/`f2` 在 `ProductDetailPage`、`ReplenishmentPage`、`DashboardPage`、`OrderForm`、`RankingPage` 共 5 处重复定义且实现不一致（`DashboardPage.fmt` 缺 `Number.isFinite` 守卫）。统一收敛到 `lib/format.ts` 的 `formatInt()` / `formatDecimal(n, digits)`，各文件改为引用，行为一致。
+
+验证结果：
+
+```bash
+cd app && npx vitest run        # 8 个测试文件，32 条用例全部通过（新增 format.test.ts）
+cd app && npx tsc -b --noEmit   # No errors found
+cd app && npx eslint <changed>  # No issues found
 ```
