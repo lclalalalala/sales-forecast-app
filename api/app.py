@@ -24,7 +24,8 @@ from flask_cors import CORS
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
-from infrastructure.csv_repository import csv_repository
+from infrastructure.dim_repository import dim_repository
+from infrastructure.inventory_sales_repository import inventory_sales_repository
 from schemas import responses
 from queries.overview import overview_bp
 from queries.ranking import ranking_bp
@@ -47,15 +48,16 @@ app.register_blueprint(replenishment_bp)
 
 @app.route("/api/health", methods=["GET"])
 def health_check():
-    """健康检查：返回数据加载状态与数据集统计。"""
+    """健康检查：返回预计算数据加载状态与维表统计。"""
     try:
-        summary = csv_repository.get_summary()
+        counts = dim_repository.counts()
+        data_loaded = dim_repository.is_loaded() and inventory_sales_repository.is_loaded()
         return responses.build_response(None, {
-            "status": "ok",
-            "data_loaded": csv_repository.is_loaded(),
-            "stores_count": summary.get("stores", 0),
-            "products_count": summary.get("products", 0),
-            "categories_count": summary.get("categories", 0),
+            "status": "ok" if data_loaded else "degraded",
+            "data_loaded": data_loaded,
+            "stores_count": counts["stores"],
+            "products_count": counts["products"],
+            "categories_count": counts["categories"],
         })
     except Exception as e:
         return responses.build_internal_error(str(e))
@@ -65,9 +67,9 @@ def health_check():
 def get_stores():
     """门店列表，用于前端门店筛选下拉框。"""
     try:
-        stores = csv_repository.get_stores()
+        stores = dim_repository.get_stores()
         return responses.build_response(None, [
-            {"id": s["id"], "name": f"门店 {s['id']}", "region": s["region"]}
+            {"id": s["id"], "name": s["name"], "region": s["region"]}
             for s in stores
         ])
     except Exception as e:
@@ -78,7 +80,7 @@ def get_stores():
 def get_categories():
     """商品类别列表，用于前端类别筛选。"""
     try:
-        return responses.build_response(None, csv_repository.get_categories())
+        return responses.build_response(None, dim_repository.get_categories())
     except Exception as e:
         return responses.build_internal_error(str(e))
 
@@ -86,14 +88,15 @@ def get_categories():
 # ─── 启动入口 ──────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    summary = csv_repository.get_summary()
+    counts = dim_repository.counts()
+    data_loaded = dim_repository.is_loaded() and inventory_sales_repository.is_loaded()
     print("=" * 60)
     print("零售门店库存与需求预测系统 API 服务（离线预计算架构）")
     print("=" * 60)
-    print(f"数据加载状态: {'成功' if csv_repository.is_loaded() else '失败'}")
-    print(f"门店数量: {summary.get('stores', 0)}")
-    print(f"商品数量: {summary.get('products', 0)}")
-    print(f"类别数量: {summary.get('categories', 0)}")
+    print(f"预计算数据加载状态: {'成功' if data_loaded else '失败'}")
+    print(f"门店数量: {counts['stores']}")
+    print(f"商品数量: {counts['products']}")
+    print(f"类别数量: {counts['categories']}")
     print("-" * 60)
     print("API 端点:")
     print("  GET /api/health                 - 健康检查")

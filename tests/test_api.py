@@ -154,6 +154,9 @@ class TestNewApiEndpoints:
         assert "price" in d
         assert "current_inventory" in d
         assert "historical_sales" in d
+        # historical_sales 读预计算事实表，字段固定为 {date, units_sold, inventory_level}
+        assert isinstance(d["historical_sales"], list) and len(d["historical_sales"]) > 0
+        assert set(d["historical_sales"][0].keys()) == {"date", "units_sold", "inventory_level"}
         assert "forecast" in d
         assert "daily_forecast_units_sold" in d["forecast"]
         assert len(d["forecast"]["daily_forecast_units_sold"]) == 7

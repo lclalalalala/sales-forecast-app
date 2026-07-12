@@ -115,7 +115,7 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 - **Method**：`GET`
 - **Path**：`/api/health`
 - **前端调用**：无（运维/启动自检使用）
-- **说明**：返回数据加载状态与数据集统计。
+- **说明**：返回预计算数据加载状态与维表统计。`data_loaded` 反映 `dim_*` 与 `fact_daily_inventory_sales` 是否就绪；未就绪时 `status` 为 `degraded`。统计口径来自 `DimRepository`。
 
 **响应示例**：
 
@@ -146,8 +146,10 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `id` | string | 门店 ID |
-| `name` | string | 展示名称，后端按 `门店 {id}` 组装 |
+| `name` | string | 展示名称，取自 `dim_store.store_name`（形如 `门店 {id}`） |
 | `region` | string | 门店所属区域 |
+
+**后端实现**：`api/app.py` `get_stores` → `dim_repository.get_stores`（只读 `dim_store.csv`）。
 
 ---
 
@@ -156,7 +158,7 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 - **Method**：`GET`
 - **Path**：`/api/categories`
 - **前端调用**：`api.getCategories()` → `app/src/services/api.ts:85`
-- **说明**：返回所有商品类别字符串列表，用于类别筛选。
+- **说明**：返回所有商品类别字符串列表，用于类别筛选（只读 `dim_product.csv` 去重）。
 
 **响应示例**：
 
@@ -191,7 +193,7 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 | `name` | string | 当前实现与 `id` 一致 |
 | `category` | string | 商品类别 |
 
-**后端实现**：`api/queries/product_detail.py:23`（`get_products`）→ `normalized_repository.get_products`。
+**后端实现**：`api/queries/product_detail.py:23`（`get_products`）→ `dim_repository.get_products`（只读 `dim_product.csv`）。
 
 ---
 
@@ -223,14 +225,13 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 | `forecast` | object | 7 天销量预测与预测区间 |
 | `replenishment` | object | 补货相关指标 |
 
-**`historical_sales` 元素字段**：
+**`historical_sales` 元素字段**（只读 `fact_daily_inventory_sales.csv`，仅取 `is_observed` 的观测日）：
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `date` | string | 日期 |
 | `units_sold` | number | 销量 |
-| `inventory_level` | number | 库存水平 |
-| `demand` | number | 需求 |
+| `inventory_level` | number | 库存水平，取事实表 `opening_inventory`（期初库存） |
 
 **`forecast` 字段**：
 
@@ -252,7 +253,7 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 | `suggested_replenishment` | number | 建议补货量 |
 | `inventory_status` | string | 库存状态 |
 
-**后端实现**：`api/queries/product_detail.py:41`（路由）→ `ProductDetailQuery.execute` → `api/queries/product_detail.py:73`。
+**后端实现**：`api/queries/product_detail.py:41`（路由）→ `ProductDetailQuery.execute`。历史序列读 `InventorySalesRepository`（`fact_daily_inventory_sales.csv`），商品基础信息读 `DimRepository`（`dim_product.csv`），预测与补货指标读 `ForecastRepository` / `ReplenishmentRepository`。整条链路只读预计算表，不触碰原始 `sales_data.csv`。
 
 ---
 
@@ -455,11 +456,21 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 ### 5.1 数据来源
 
-- 后端启动时从 `data/sales_data.csv` 加载原始销售与库存数据。
-- `CsvRepository` 负责原始 CSV 读取；`NormalizedRepository` 统一列名并提供标准化 DataFrame。
-- 销量预测、预测误差统计、补货建议均已通过离线批处理预计算，分别存储在 `mock_data/fact_forecast.csv`、`mock_data/fact_forecast_error_stats.csv`、`mock_data/fact_daily_replenishment.csv`。
-- 在线 API 通过 `ForecastRepository` 与 `ReplenishmentRepository` 直接读取这些预计算表，不再实时执行预测或补货公式。
-- 数据加载失败会导致服务启动异常，`/api/health` 中 `data_loaded` 返回 `false`。
+在线 API 遵循「离线预计算、在线只读」原则：所有对外数据均来自离线批处理产出的预计算表（`data/processed_data/`），在线层不再加载或遍历原始 `data/sales_data.csv`。
+
+| 预计算表 | 在线仓储 | 服务的接口 |
+|----------|----------|------------|
+| `dim_store.csv` | `DimRepository` | `/api/stores` |
+| `dim_product.csv` | `DimRepository` | `/api/categories`、`/api/products`、商品详情基础信息 |
+| `fact_daily_inventory_sales.csv` | `InventorySalesRepository` | 商品详情 `historical_sales`、观测数据区间 |
+| `fact_daily_sales_metrics.csv` | `SalesMetricsRepository` | `/api/overview` 日销量趋势 |
+| `fact_product_sales_summary.csv` | `ProductSummaryRepository` | `/api/rankings`、`/api/overview` Top/Bottom |
+| `fact_daily_replenishment.csv` | `ReplenishmentRepository` | `/api/replenishment`、商品详情补货指标 |
+| `fact_forecast.csv` / `fact_forecast_error_stats.csv` | `ForecastRepository` | 7 天销量预测与预测区间 |
+
+- 在线 API 直接读取上述预计算表，不再实时执行预测、补货或明细聚合公式；在线计算仅限对少量已算好数据的求和/计数/排序。
+- 原始 `sales_data.csv` 仅供离线批处理（`offline_calculation/`）使用；`CsvRepository` / `NormalizedRepository` 已退出在线主链路。
+- 任一预计算表加载失败时，`/api/health` 的 `data_loaded` 返回 `false`、`status` 为 `degraded`。
 
 ### 5.2 配置
 

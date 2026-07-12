@@ -5,13 +5,17 @@
 """
 
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from flask import Blueprint, request
 
 from infrastructure.config_repository import ConfigRepository, config_repository
+from infrastructure.dim_repository import DimRepository, dim_repository
 from infrastructure.forecast_repository import ForecastRepository, forecast_repository
-from infrastructure.normalized_repository import NormalizedRepository, normalized_repository
+from infrastructure.inventory_sales_repository import (
+    InventorySalesRepository,
+    inventory_sales_repository,
+)
 from infrastructure.replenishment_repository import ReplenishmentRepository, replenishment_repository
 from schemas import requests, responses
 
@@ -27,7 +31,7 @@ def get_products():
         store_id = requests.parse_store_id(request.args.get("store_id"), "S001")
         category = requests.parse_category(request.args.get("category"))
 
-        products = normalized_repository.get_products(store_id=store_id, category=category)
+        products = dim_repository.get_products(store_id=store_id, category=category)
         return responses.build_response(None, [
             {"id": p["id"], "name": p["id"], "category": p["category"]}
             for p in products
@@ -60,12 +64,14 @@ class ProductDetailQuery:
 
     def __init__(
         self,
-        repo: NormalizedRepository,
+        dim_repo: DimRepository,
+        inventory_repo: InventorySalesRepository,
         forecast_repository: ForecastRepository,
         replenishment_repository: ReplenishmentRepository,
         config: ConfigRepository,
     ):
-        self._repo = repo
+        self._dim = dim_repo
+        self._inventory = inventory_repo
         self._forecast_repository = forecast_repository
         self._replenishment_repository = replenishment_repository
         self._config = config
@@ -82,16 +88,15 @@ class ProductDetailQuery:
             raise ValueError(f"门店 {store_id} 无数据")
 
         as_of_date = datetime.strptime(as_of_date_str, "%Y-%m-%d")
-        product_info = self._repo.get_product_info(store_id, product_id)
+        product_info = self._dim.get_product_info(store_id, product_id)
 
-        # 历史销量与库存（原始明细数据，保持在线读取）
-        days_for_history = range_days if range_days is not None else 36500
-        history = self._get_product_history(store_id, product_id, as_of_date, days_for_history)
-        historical_sales = [
-            {"date": h["date"], "units_sold": h["units_sold"],
-             "inventory_level": h["inventory_level"], "demand": h["demand"]}
-            for h in history
-        ]
+        # 历史销量与库存（读预计算事实表 fact_daily_inventory_sales）
+        history_start = (
+            as_of_date - timedelta(days=range_days - 1) if range_days is not None else None
+        )
+        historical_sales = self._inventory.get_history(
+            store_id, product_id, start_date=history_start, end_date=as_of_date,
+        )
 
         # 补货相关明细（来自预计算表）
         repl = self._replenishment_repository.get_replenishment(store_id, product_id, as_of_date)
@@ -127,19 +132,17 @@ class ProductDetailQuery:
                 forecast["status"] = forecast_output.status
                 forecast["message"] = None
 
-        # 实际数据范围
-        scope_rows = self._repo.get_rows(store_id=store_id, product_id=product_id)
-        if scope_rows.empty:
+        # 实际数据范围（读预计算事实表的观测区间）
+        observed_range = self._inventory.get_observed_date_range(store_id, product_id)
+        if observed_range is None:
             actual_start = as_of_date_str
             actual_end = as_of_date_str
         else:
-            actual_start_dt = scope_rows["date"].min()
-            actual_end_dt = scope_rows["date"].max()
+            actual_start = observed_range["min_date"]
+            actual_end = observed_range["max_date"]
             if range_days is not None:
-                requested_start = as_of_date - timedelta(days=range_days - 1)
-                actual_start_dt = max(actual_start_dt, requested_start)
-            actual_start = actual_start_dt.strftime("%Y-%m-%d")
-            actual_end = actual_end_dt.strftime("%Y-%m-%d")
+                requested_start = (as_of_date - timedelta(days=range_days - 1)).strftime("%Y-%m-%d")
+                actual_start = max(actual_start, requested_start)
 
         return {
             "context": {
@@ -166,37 +169,11 @@ class ProductDetailQuery:
             },
         }
 
-    def _get_product_history(
-        self,
-        store_id: str,
-        product_id: str,
-        end_date: datetime,
-        days: int,
-    ) -> List[Dict]:
-        """返回指定商品的历史数据，按日期升序排列。"""
-        start_date = end_date - timedelta(days=days - 1)
-        df = self._repo.get_rows(
-            store_id=store_id, product_id=product_id,
-            start_date=start_date, end_date=end_date,
-        )
-        if df.empty:
-            return []
-
-        df = df.sort_values("date")
-        return [
-            {
-                "date": row["date"].strftime("%Y-%m-%d"),
-                "units_sold": int(row["units_sold"]),
-                "inventory_level": int(row["inventory_level"]),
-                "demand": int(row["demand"]),
-            }
-            for _, row in df.iterrows()
-        ]
-
 
 # ─── 单例 ─────────────────────────────────────────────────────────
 _query = ProductDetailQuery(
-    normalized_repository,
+    dim_repository,
+    inventory_sales_repository,
     forecast_repository,
     replenishment_repository,
     config_repository,

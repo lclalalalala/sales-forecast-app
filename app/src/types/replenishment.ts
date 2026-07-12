@@ -48,7 +48,6 @@ export interface ProductHistoryRecord {
   date: string;
   units_sold: number;
   inventory_level: number;
-  demand: number;
 }
 
 export interface ProductReplenishmentDetail {

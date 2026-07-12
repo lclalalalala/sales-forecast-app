@@ -28,9 +28,17 @@ forecast_repository_module = _load_module(
 replenishment_repository_module = _load_module(
     "infrastructure.replenishment_repository", "infrastructure/replenishment_repository.py"
 )
+dim_repository_module = _load_module(
+    "infrastructure.dim_repository", "infrastructure/dim_repository.py"
+)
+inventory_sales_repository_module = _load_module(
+    "infrastructure.inventory_sales_repository", "infrastructure/inventory_sales_repository.py"
+)
 
 ForecastRepository = forecast_repository_module.ForecastRepository
 ReplenishmentRepository = replenishment_repository_module.ReplenishmentRepository
+DimRepository = dim_repository_module.DimRepository
+InventorySalesRepository = inventory_sales_repository_module.InventorySalesRepository
 
 
 DATA_DIR = os.path.join(PROJECT_ROOT, "data", "processed_data")
@@ -96,6 +104,79 @@ class TestReplenishmentRepository(unittest.TestCase):
     def test_get_replenishments_by_store_and_category(self):
         repls = self.repo.get_replenishments_by_store("S001", category="Electronics")
         self.assertGreater(len(repls), 0)
+
+
+class TestDimRepository(unittest.TestCase):
+    """DimRepository 测试（读 dim_store / dim_product）。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.repo = DimRepository(DATA_DIR)
+
+    def test_loaded(self):
+        self.assertTrue(self.repo.is_loaded())
+
+    def test_get_stores(self):
+        stores = self.repo.get_stores()
+        self.assertEqual(len(stores), 5)
+        first = stores[0]
+        self.assertIn("id", first)
+        self.assertIn("name", first)
+        self.assertIn("region", first)
+
+    def test_get_categories(self):
+        categories = self.repo.get_categories()
+        self.assertGreater(len(categories), 0)
+        self.assertTrue(all(isinstance(c, str) for c in categories))
+
+    def test_get_products(self):
+        products = self.repo.get_products()
+        self.assertEqual(len(products), 20)
+        self.assertIn("id", products[0])
+        self.assertIn("category", products[0])
+        self.assertIn("price", products[0])
+
+    def test_get_product_info(self):
+        info = self.repo.get_product_info("S001", "P0001")
+        self.assertEqual(info["product_id"], "P0001")
+        self.assertNotEqual(info["category"], "")
+
+    def test_counts(self):
+        counts = self.repo.counts()
+        self.assertEqual(counts["stores"], 5)
+        self.assertEqual(counts["products"], 20)
+        self.assertGreater(counts["categories"], 0)
+
+
+class TestInventorySalesRepository(unittest.TestCase):
+    """InventorySalesRepository 测试（读 fact_daily_inventory_sales）。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.repo = InventorySalesRepository(DATA_DIR)
+
+    def test_loaded(self):
+        self.assertTrue(self.repo.is_loaded())
+
+    def test_get_history_shape(self):
+        history = self.repo.get_history("S001", "P0001")
+        self.assertGreater(len(history), 0)
+        first = history[0]
+        self.assertEqual(set(first.keys()), {"date", "units_sold", "inventory_level"})
+
+    def test_get_history_sorted(self):
+        history = self.repo.get_history("S001", "P0001")
+        dates = [h["date"] for h in history]
+        self.assertEqual(dates, sorted(dates))
+
+    def test_get_history_missing_combo(self):
+        history = self.repo.get_history("S999", "P9999")
+        self.assertEqual(history, [])
+
+    def test_get_observed_date_range(self):
+        rng = self.repo.get_observed_date_range("S001", "P0001")
+        self.assertIsNotNone(rng)
+        self.assertLessEqual(rng["min_date"], rng["max_date"])
 
 
 if __name__ == "__main__":
