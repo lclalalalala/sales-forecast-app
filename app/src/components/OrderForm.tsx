@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ClipboardCheck, Package, Store as StoreIcon,
-  CalendarDays, ShieldAlert, Calculator, Boxes, Tag,
+  CalendarDays, ShieldAlert, Calculator, Boxes, Tag, AlertTriangle,
 } from 'lucide-react';
 import { api } from '@/services/api';
 import { isAbortError, getErrorMessage } from '@/lib/errors';
@@ -182,9 +182,12 @@ export default function OrderForm({
           <p className="text-sm mb-6 text-[var(--text-secondary)]">
             记录号：{success.orderId}
           </p>
-          <p className="text-xs mb-6 text-[var(--text-tertiary)]">
-            当前为前端演示，未向真实供应链系统提交采购订单。
-          </p>
+          <div className="flex items-center justify-center gap-2 mb-6 px-3 py-2.5 rounded-lg border border-[var(--accent-warning)]/40 bg-[var(--accent-warning)]/10">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-[var(--accent-warning)]" />
+            <p className="text-xs font-medium text-[var(--accent-warning)]">
+              当前为前端演示，未向真实供应链系统提交采购订单。
+            </p>
+          </div>
           <div className="flex items-center justify-center gap-3">
             <Button variant="outline" onClick={onClose}>
               返回补货建议
