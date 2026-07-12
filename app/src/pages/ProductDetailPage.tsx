@@ -6,24 +6,32 @@
  */
 
 import { useEffect, useMemo, useState, useRef, memo } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 import {
-  Package, TrendingUp, Box, ShoppingCart, Calculator,
+  Package, TrendingUp, Box, ShoppingCart, Calculator, ClipboardCheck,
 } from 'lucide-react';
 import { api } from '@/services/api';
 import { isAbortError, getErrorMessage } from '@/lib/errors';
-import { DEFAULT_PRODUCT_ID, PARAM_STORE_ID, PARAM_PRODUCT_ID, PARAM_QUANTITY } from '@/lib/constants';
+import { DEFAULT_PRODUCT_ID } from '@/lib/constants';
 import FilterBar from '@/components/FilterBar';
 import InventoryStatusBadge from '@/components/InventoryStatusBadge';
 import DataState from '@/components/DataState';
 import KpiCard from '@/components/KpiCard';
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable';
 import ReasonDrawer from '@/components/ReasonDrawer';
+import OrderForm from '@/components/OrderForm';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -294,13 +302,11 @@ interface ReplenishmentSectionProps {
 
 const ReplenishmentSection = memo(function ReplenishmentSection({ data, storeId }: ReplenishmentSectionProps) {
   const r = data.replenishment ?? {};
+  const [orderOpen, setOrderOpen] = useState(false);
   const forecast7Total = (data.forecast?.daily_forecast_units_sold ?? []).reduce(
     (sum, p) => sum + p.units_sold,
     0,
   );
-  const orderLink = `/orders/new?${PARAM_STORE_ID}=${encodeURIComponent(storeId)}` +
-    `&${PARAM_PRODUCT_ID}=${encodeURIComponent(data.product_id)}` +
-    `&${PARAM_QUANTITY}=${encodeURIComponent(r.suggested_replenishment ?? 0)}`;
 
   return (
     <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5 mb-6">
@@ -334,13 +340,35 @@ const ReplenishmentSection = memo(function ReplenishmentSection({ data, storeId 
             查看计算依据
           </Button>
         </ReasonDrawer>
-        <Button asChild size="sm" className="bg-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/90">
-          <Link to={orderLink}>
-            <ShoppingCart className="w-4 h-4 mr-1" />
-            去下单
-          </Link>
+        <Button
+          size="sm"
+          className="bg-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/90"
+          onClick={() => setOrderOpen(true)}
+        >
+          <ShoppingCart className="w-4 h-4 mr-1" />
+          去下单
         </Button>
       </div>
+
+      <Dialog open={orderOpen} onOpenChange={setOrderOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[var(--text-primary)]">
+              <ClipboardCheck className="w-5 h-5 text-[var(--accent-primary)]" />
+              补货下单
+            </DialogTitle>
+            <DialogDescription>
+              请核对补货依据并填写数量与到货日期
+            </DialogDescription>
+          </DialogHeader>
+          <OrderForm
+            storeId={storeId}
+            productId={data.product_id}
+            suggestedQuantity={r.suggested_replenishment ?? 0}
+            onClose={() => setOrderOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 });
