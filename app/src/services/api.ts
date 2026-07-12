@@ -36,7 +36,10 @@ async function fetchApi<T>(
   params?: Record<string, string | undefined>,
   signal?: AbortSignal
 ): Promise<{ context: AnalysisContext; data: T }> {
-  const url = new URL(`${API_BASE}${endpoint}`);
+  // API_BASE 可能是绝对地址（开发态 http://localhost:8999/api）或相对路径（打包态 /api）。
+  // 传入 window.location.origin 作为 base：绝对地址时被忽略，相对路径时按当前源解析，
+  // 避免 new URL('/api/stores') 因缺少 base 抛 "cannot be parsed as a URL"。
+  const url = new URL(`${API_BASE}${endpoint}`, window.location.origin);
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
