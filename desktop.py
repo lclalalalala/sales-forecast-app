@@ -76,19 +76,44 @@ def main() -> int:
             payload = json.loads(resp.read())
         data = payload.get("data", {})
         ok = data.get("data_loaded") is True
-        sys.stdout.write(f"[selftest] health={data.get('status')} data_loaded={data.get('data_loaded')} "
-                         f"stores={data.get('stores_count')} products={data.get('products_count')}\n")
-        return 0 if ok else 1
+
+        # 同时验证 GUI 后端可用（打包易漏收集 webview.platforms.* 及 pyobjc）
+        gui_ok = False
+        gui_msg = ""
+        try:
+            import platform
+
+            import webview  # noqa: F401
+
+            system = platform.system()
+            if system == "Darwin":
+                import webview.platforms.cocoa  # noqa: F401
+            elif system == "Windows":
+                import webview.platforms.edgechromium  # noqa: F401
+            else:
+                import webview.platforms.gtk  # noqa: F401
+            gui_ok = True
+        except Exception as exc:  # noqa: BLE001
+            gui_msg = repr(exc)
+
+        sys.stdout.write(
+            f"[selftest] health={data.get('status')} data_loaded={data.get('data_loaded')} "
+            f"stores={data.get('stores_count')} products={data.get('products_count')} "
+            f"gui_backend={'ok' if gui_ok else 'FAIL ' + gui_msg}\n"
+        )
+        return 0 if (ok and gui_ok) else 1
 
     url = f"http://{HOST}:{port}/"
 
-    # 优先使用 pywebview 原生窗口；若不可用则退回系统浏览器，保证仍能使用。
+    # 优先使用 pywebview 原生窗口；若后端不可用则退回系统浏览器，保证仍能使用。
     try:
         import webview
-    except ImportError:
+    except Exception as exc:  # noqa: BLE001  （含 ImportError 及后端加载失败）
+        import traceback
         import webbrowser
 
-        sys.stderr.write("未安装 pywebview，改用系统浏览器打开。\n")
+        sys.stderr.write(f"pywebview 不可用（{exc!r}），改用系统浏览器打开。\n")
+        traceback.print_exc()
         webbrowser.open(url)
         server_thread.join()
         return 0

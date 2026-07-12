@@ -15,6 +15,8 @@ PyInstaller 打包配置 - desktop.spec
 
 import os
 
+from PyInstaller.utils.hooks import collect_submodules
+
 # .spec 执行时工作目录即项目根目录
 ROOT = os.path.abspath(os.getcwd())
 
@@ -26,6 +28,19 @@ datas = [
 
 # 后端使用绝对导入（infrastructure/schemas/queries），需把 api/ 加入分析搜索路径
 pathex = [os.path.join(ROOT, "api")]
+
+# pywebview 在运行时惰性 import webview.platforms.<backend>（见 webview/guilib.py），
+# 静态分析跟不到，须显式收集所有子模块；macOS 后端(cocoa)另需 pyobjc 框架。
+webview_hidden = collect_submodules("webview")
+pyobjc_hidden = [
+    "objc",
+    "Foundation",
+    "AppKit",
+    "WebKit",
+    "Quartz",
+    "CoreFoundation",
+    "PyObjCTools",
+]
 
 # 蓝图与仓储多为运行时按需导入，显式声明以防被漏收集
 hiddenimports = [
@@ -40,13 +55,13 @@ hiddenimports = [
     "infrastructure.product_summary_repository",
     "infrastructure.sales_metrics_repository",
     "infrastructure.config_repository",
-]
+] + webview_hidden + pyobjc_hidden
 
 # 在线服务不依赖以下重库，排除以缩小体积：
 #   - sklearn/scipy/matplotlib：仅离线计算/绘图用
 #   - pyarrow/sqlalchemy/psycopg2/botocore/boto3/s3fs：pandas 读写数据库/云存储的可选后端，本项目仅读 CSV
 #   - lxml/html5lib/bs4/openpyxl/xlrd：pandas 读 HTML/Excel 的可选依赖
-#   - bottle/aiohttp：pywebview 内置 HTTP 服务器可选依赖，本项目自带 Flask，不需要
+# 注意：bottle 不能排除——pywebview 的 cocoa 后端 import 时链式加载 webview.http（依赖 bottle）。
 excludes = [
     "sklearn",
     "scipy",
@@ -66,8 +81,6 @@ excludes = [
     "bs4",
     "openpyxl",
     "xlrd",
-    "bottle",
-    "aiohttp",
     "cryptography",
     "PIL",
 ]
