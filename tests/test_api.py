@@ -108,6 +108,9 @@ class TestNewApiEndpoints:
         assert "avg_daily_units_sold" in d["kpis"]
         assert len(d["top_products"]) == 5
         assert len(d["bottom_products"]) == 5
+        # daily_sales 元素字段须为 {date, units_sold}（对齐前端 DailySales 与 07-API.md §3.6）
+        assert isinstance(d["daily_sales"], list) and len(d["daily_sales"]) > 0
+        assert set(d["daily_sales"][0].keys()) == {"date", "units_sold"}
 
     def test_rankings_endpoint(self):
         data = self._get_json("/api/rankings?store_id=S001&range=90d&top_n=3&bottom_n=3")
@@ -177,6 +180,51 @@ class TestNewApiEndpoints:
             assert "actual_data_start" in ctx
             assert "actual_data_end" in ctx
             assert ctx["actual_data_end"] >= ctx["actual_data_start"]
+
+
+# ═══════════════════════════════════════════════════════════════
+# 元数据端点
+# ═══════════════════════════════════════════════════════════════
+
+class TestMetadataEndpoints:
+    """健康检查 / 门店 / 类别端点（context=null）。"""
+
+    @classmethod
+    def setup_class(cls):
+        from app import app
+        cls.client = app.test_client()
+
+    def _get_json(self, url):
+        response = self.client.get(url)
+        assert response.status_code == 200, f"{url} 应返回 200"
+        assert response.content_type == "application/json"
+        return json.loads(response.data)
+
+    def test_health_endpoint(self):
+        data = self._get_json("/api/health")
+        assert data["context"] is None
+        d = data["data"]
+        assert d["status"] == "ok"
+        assert d["data_loaded"] is True
+        assert d["stores_count"] == 5
+        assert d["products_count"] == 20
+        assert d["categories_count"] > 0
+
+    def test_stores_endpoint(self):
+        data = self._get_json("/api/stores")
+        assert data["context"] is None
+        stores = data["data"]
+        assert len(stores) == 5
+        first = stores[0]
+        assert {"id", "name", "region"} <= set(first.keys())
+        assert first["name"] == f"门店 {first['id']}"
+
+    def test_categories_endpoint(self):
+        data = self._get_json("/api/categories")
+        assert data["context"] is None
+        categories = data["data"]
+        assert isinstance(categories, list) and len(categories) > 0
+        assert all(isinstance(c, str) for c in categories)
 
 
 # ═══════════════════════════════════════════════════════════════

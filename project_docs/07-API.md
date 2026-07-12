@@ -191,7 +191,7 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 | `name` | string | 当前实现与 `id` 一致 |
 | `category` | string | 商品类别 |
 
-**后端实现**：`api/routes/product_routes.py:16` → `normalized_repository.get_products`。
+**后端实现**：`api/queries/product_detail.py:23`（`get_products`）→ `normalized_repository.get_products`。
 
 ---
 
@@ -252,7 +252,7 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 | `suggested_replenishment` | number | 建议补货量 |
 | `inventory_status` | string | 库存状态 |
 
-**后端实现**：`api/routes/product_routes.py:38` → `application.product_detail_query.execute` → `api/application/product_detail_query.py:41`。
+**后端实现**：`api/queries/product_detail.py:41`（路由）→ `ProductDetailQuery.execute` → `api/queries/product_detail.py:73`。
 
 ---
 
@@ -299,7 +299,7 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 **`top_products` / `bottom_products` 元素字段**：与 `/api/rankings` 的 `RankingItem` 一致（见 3.7）。
 
-**后端实现**：`api/routes/overview_routes.py:15` → `application.overview_query.execute` → `api/application/overview_query.py:38`。
+**后端实现**：`api/queries/overview.py:24`（路由）→ `OverviewQuery.execute` → `api/queries/overview.py:57`。
 
 ---
 
@@ -344,7 +344,7 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 | `coverage_days` | number \| null | 库存可覆盖天数 |
 | `inventory_status` | string | 库存状态 |
 
-**后端实现**：`api/routes/ranking_routes.py:16` → `application.ranking_query.execute` → `api/application/ranking_query.py:28`。
+**后端实现**：`api/queries/ranking.py:23`（路由）→ `RankingQuery.execute` → `api/queries/ranking.py:63`。
 
 ---
 
@@ -387,7 +387,7 @@ CORS(app, resources={r"/api/*": {"origins": "*"}})
 | `status` | string | 计算状态 |
 | `message` | string \| null | 状态说明 |
 
-**后端实现**：`api/routes/replenishment_routes.py:15` → `application.replenishment_query.execute` → `api/application/replenishment_query.py:27`。
+**后端实现**：`api/queries/replenishment.py:21`（路由）→ `ReplenishmentQuery.execute` → `api/queries/replenishment.py:51`。
 
 ---
 

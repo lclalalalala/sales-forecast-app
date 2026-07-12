@@ -82,12 +82,18 @@ class OverviewQuery:
         else:
             sales_start = actual_start
 
-        daily_sales = self._sales_metrics.get_daily_sales(
+        raw_daily_sales = self._sales_metrics.get_daily_sales(
             store_id, category_for_metrics, sales_start, actual_end
         )
 
-        total_sold = sum(d["total_units_sold"] for d in daily_sales)
-        avg_daily = round(total_sold / len(daily_sales), 1) if daily_sales else 0.0
+        total_sold = sum(d["total_units_sold"] for d in raw_daily_sales)
+        avg_daily = round(total_sold / len(raw_daily_sales), 1) if raw_daily_sales else 0.0
+
+        # 对齐前端契约（07-API.md §3.6 / DailySales）：字段名统一为 units_sold
+        daily_sales = [
+            {"date": d["date"], "units_sold": d["total_units_sold"]}
+            for d in raw_daily_sales
+        ]
 
         repl_list = self._replenishment.get_replenishments_by_store(
             store_id=store_id,
