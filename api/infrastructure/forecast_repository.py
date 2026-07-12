@@ -11,7 +11,7 @@ from typing import List, Optional
 
 import pandas as pd
 
-from forecast.schemas import (
+from schemas.forecast import (
     ForecastOutput,
     ForecastPoint,
     PredictionInterval,
