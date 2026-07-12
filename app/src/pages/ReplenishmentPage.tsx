@@ -31,9 +31,9 @@ import {
 } from '@/components/ui/dialog';
 import { useAnalysis } from '@/state/analysisContext';
 import type { Store, ReplenishmentSuggestion, AnalysisContext } from '@/types';
+import { formatInt as fmt, formatDecimal } from '@/lib/format';
 
-const fmt = (n?: number | null) => (n != null && Number.isFinite(n) ? n.toLocaleString('zh-CN') : '-');
-const f1 = (n?: number | null) => (n != null && Number.isFinite(n) && !Number.isNaN(n) ? n.toFixed(1) : '-');
+const f1 = (n?: number | null) => formatDecimal(n, 1);
 
 const QUICK_FILTERS = [
   { key: 'all', label: '全部商品' },

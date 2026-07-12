@@ -24,16 +24,12 @@ import KpiCard from '@/components/KpiCard';
 import DataTable, { type DataTableColumn } from '@/components/ui/DataTable';
 import { useAnalysis } from '@/state/analysisContext';
 import type { Store, RankingItem, AnalysisContext } from '@/types';
+import { formatInt as fmt, formatDecimal, formatLocalDate } from '@/lib/format';
 
-const fmt = (n?: number | null) => (n != null ? n.toLocaleString('zh-CN') : '-');
-const f1 = (n?: number | null) => (n != null && !Number.isNaN(n) ? n.toFixed(1) : '-');
+const f1 = (n?: number | null) => formatDecimal(n, 1);
 
 function parseDate(value: string): Date {
   return new Date(`${value}T00:00:00`);
-}
-
-function formatDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
 }
 
 function computeSelectedStart(range: string, asOfDate: string): string | null {
@@ -42,7 +38,7 @@ function computeSelectedStart(range: string, asOfDate: string): string | null {
   if (Number.isNaN(days)) return null;
   const d = parseDate(asOfDate);
   d.setDate(d.getDate() - days + 1);
-  return formatDate(d);
+  return formatLocalDate(d);
 }
 
 interface TitleBlockProps {
@@ -175,94 +171,100 @@ interface RankTablesProps {
   top: RankingItem[];
   bottom: RankingItem[];
   category: string;
+  onProductClick: (productId: string) => void;
 }
 
-const rankColumns: DataTableColumn<RankingItem>[] = [
-  {
-    key: 'rank',
-    header: '排名',
-    width: '60px',
-    render: (item) => (
-      <div className="flex items-center gap-1">
-        {item.rank === 1 ? (
-          <Medal className="w-4 h-4 text-[var(--accent-warning)]" />
-        ) : (
-          <span className="text-[var(--text-secondary)]">{item.rank}</span>
-        )}
-      </div>
-    ),
-  },
-  {
-    key: 'product_id',
-    header: '商品编号',
-    sortable: true,
-    render: (item) => (
-      <Link
-        to={`/products/${item.product_id}`}
-        className="font-medium text-[var(--accent-primary)] hover:underline"
-      >
-        {item.product_id}
-      </Link>
-    ),
-  },
-  {
-    key: 'category',
-    header: '商品类别',
-    sortable: true,
-    render: (item) => (
-      <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-[var(--bg-surface-hover)] text-[var(--accent-primary)]">
-        {item.category}
-      </span>
-    ),
-  },
-  {
-    key: 'total_sold',
-    header: '总销量',
-    align: 'right',
-    sortable: true,
-    render: (item) => <span className="font-medium text-[var(--text-primary)]">{fmt(item.total_sold)}</span>,
-  },
-  {
-    key: 'avg_daily',
-    header: '日均销量',
-    align: 'right',
-    sortable: true,
-    render: (item) => <span className="text-[var(--text-secondary)]">{f1(item.avg_daily)}</span>,
-  },
-  {
-    key: 'current_inventory',
-    header: '当前库存',
-    align: 'right',
-    sortable: true,
-    render: (item) => <span className="text-[var(--text-secondary)]">{fmt(item.current_inventory)}</span>,
-  },
-  {
-    key: 'inventory_status',
-    header: '库存状态',
-    align: 'center',
-    sortable: true,
-    render: (item) => <InventoryStatusBadge status={item.inventory_status} />,
-  },
-  {
-    key: 'action',
-    header: '操作',
-    align: 'center',
-    fixed: true,
-    render: (item) => (
-      <Link
-        to={`/products/${item.product_id}`}
-        className="inline-flex items-center gap-0.5 text-xs text-[var(--accent-primary)] hover:underline"
-      >
-        详情
-        <ChevronRight className="w-3 h-3" />
-      </Link>
-    ),
-  },
-];
+function createRankColumns(onProductClick: (productId: string) => void): DataTableColumn<RankingItem>[] {
+  return [
+    {
+      key: 'rank',
+      header: '排名',
+      width: '60px',
+      render: (item) => (
+        <div className="flex items-center gap-1">
+          {item.rank === 1 ? (
+            <Medal className="w-4 h-4 text-[var(--accent-warning)]" />
+          ) : (
+            <span className="text-[var(--text-secondary)]">{item.rank}</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'product_id',
+      header: '商品编号',
+      sortable: true,
+      render: (item) => (
+        <Link
+          to={`/products/${item.product_id}`}
+          onClick={() => onProductClick(item.product_id)}
+          className="font-medium text-[var(--accent-primary)] hover:underline"
+        >
+          {item.product_id}
+        </Link>
+      ),
+    },
+    {
+      key: 'category',
+      header: '商品类别',
+      sortable: true,
+      render: (item) => (
+        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-[var(--bg-surface-hover)] text-[var(--accent-primary)]">
+          {item.category}
+        </span>
+      ),
+    },
+    {
+      key: 'total_sold',
+      header: '总销量',
+      align: 'right',
+      sortable: true,
+      render: (item) => <span className="font-medium text-[var(--text-primary)]">{fmt(item.total_sold)}</span>,
+    },
+    {
+      key: 'avg_daily',
+      header: '日均销量',
+      align: 'right',
+      sortable: true,
+      render: (item) => <span className="text-[var(--text-secondary)]">{f1(item.avg_daily)}</span>,
+    },
+    {
+      key: 'current_inventory',
+      header: '当前库存',
+      align: 'right',
+      sortable: true,
+      render: (item) => <span className="text-[var(--text-secondary)]">{fmt(item.current_inventory)}</span>,
+    },
+    {
+      key: 'inventory_status',
+      header: '库存状态',
+      align: 'center',
+      sortable: true,
+      render: (item) => <InventoryStatusBadge status={item.inventory_status} />,
+    },
+    {
+      key: 'action',
+      header: '操作',
+      align: 'center',
+      fixed: true,
+      render: (item) => (
+        <Link
+          to={`/products/${item.product_id}`}
+          onClick={() => onProductClick(item.product_id)}
+          className="inline-flex items-center gap-0.5 text-xs text-[var(--accent-primary)] hover:underline"
+        >
+          详情
+          <ChevronRight className="w-3 h-3" />
+        </Link>
+      ),
+    },
+  ];
+}
 
-const RankTables = memo(function RankTables({ top, bottom, category }: RankTablesProps) {
+const RankTables = memo(function RankTables({ top, bottom, category, onProductClick }: RankTablesProps) {
   const titleClass = "flex items-center gap-2 text-base font-semibold text-[var(--text-primary)] mb-4";
   const chipClass = "text-xs px-2 py-0.5 rounded-full bg-[var(--bg-surface-hover)] text-[var(--accent-primary)]";
+  const columns = useMemo(() => createRankColumns(onProductClick), [onProductClick]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -273,7 +275,7 @@ const RankTables = memo(function RankTables({ top, bottom, category }: RankTable
           {category && <span className={chipClass}>{category}</span>}
         </div>
         <DataTable
-          columns={rankColumns}
+          columns={columns}
           data={top}
           rowKey={(item) => item.product_id}
           skeletonRows={5}
@@ -287,7 +289,7 @@ const RankTables = memo(function RankTables({ top, bottom, category }: RankTable
           {category && <span className={chipClass}>{category}</span>}
         </div>
         <DataTable
-          columns={rankColumns}
+          columns={columns}
           data={bottom}
           rowKey={(item) => item.product_id}
           skeletonRows={5}
@@ -374,19 +376,7 @@ export default function DashboardPage() {
       >
         {kpis && <KpiCards kpis={kpis} days={rangeDays} />}
         <TrendChart dailySales={dailySales} category={category} days={rangeDays} />
-        <div
-          onClick={(e) => {
-            const target = e.target;
-            if (!(target instanceof HTMLElement)) return;
-            const link = target.closest('a');
-            if (link) {
-              const pid = link.getAttribute('href')?.split('/').pop();
-              if (pid) handleProductClick(pid);
-            }
-          }}
-        >
-          <RankTables top={top} bottom={bottom} category={category} />
-        </div>
+        <RankTables top={top} bottom={bottom} category={category} onProductClick={handleProductClick} />
       </DataState>
     </div>
   );

@@ -31,18 +31,14 @@ import { Calendar } from '@/components/ui/calendar';
 import InventoryStatusBadge from '@/components/InventoryStatusBadge';
 import type { Store, OrderDraft, ProductDetail } from '@/types';
 import { cn } from '@/lib/utils';
+import { formatInt as fmt, formatDecimal, formatLocalDate } from '@/lib/format';
 
-const fmt = (n?: number | null) => (n != null && Number.isFinite(n) ? n.toLocaleString('zh-CN') : '-');
-const f1 = (n?: number | null) => (n != null && Number.isFinite(n) && !Number.isNaN(n) ? n.toFixed(1) : '-');
+const f1 = (n?: number | null) => formatDecimal(n, 1);
 
 function parseQuantity(value: string | null): number {
   if (!value) return 0;
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 && Number.isInteger(parsed) ? parsed : -1;
-}
-
-function formatDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
 }
 
 function addDays(date: Date, days: number): Date {
@@ -151,7 +147,7 @@ export default function OrderForm({
       store_id: storeId,
       product_id: productId,
       quantity: quantityNum,
-      expected_arrival_date: effectiveArrivalDate ? formatDate(effectiveArrivalDate) : undefined,
+      expected_arrival_date: effectiveArrivalDate ? formatLocalDate(effectiveArrivalDate) : undefined,
       note: note.trim() || undefined,
     };
 
@@ -314,7 +310,7 @@ export default function OrderForm({
                     )}
                   >
                     <CalendarDays className="mr-2 h-4 w-4" />
-                    {effectiveArrivalDate ? formatDate(effectiveArrivalDate) : '选择日期'}
+                    {effectiveArrivalDate ? formatLocalDate(effectiveArrivalDate) : '选择日期'}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0 bg-[var(--bg-surface)] border-[var(--border-subtle)]">

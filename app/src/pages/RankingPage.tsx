@@ -14,23 +14,22 @@ import InventoryStatusBadge from '@/components/InventoryStatusBadge';
 import DataState from '@/components/DataState';
 import { useAnalysis } from '@/state/analysisContext';
 import type { Store, RankingItem } from '@/types';
+import { formatInt as fmt, formatDecimal } from '@/lib/format';
 
-const fmt = (n?: number | null) => (n != null ? n.toLocaleString('zh-CN') : '-');
-const f1 = (n?: number | null) =>
-  n != null && Number.isFinite(n) && !Number.isNaN(n) ? n.toFixed(1) : '-';
-const f2 = (n?: number | null) =>
-  n != null && Number.isFinite(n) && !Number.isNaN(n) ? n.toFixed(2) : '-';
+const f1 = (n?: number | null) => formatDecimal(n, 1);
+const f2 = (n?: number | null) => formatDecimal(n, 2);
 
 interface RankingTableProps {
   title: string;
   items: RankingItem[];
   isTop: boolean;
   category: string;
+  onProductClick: (productId: string) => void;
 }
 
 const headers = ['排名', '商品', '类别', '总销量', '日均', '当前库存', '在途库存', '覆盖天数', '库存状态'];
 
-const RankingTable = memo(function RankingTable({ title, items, isTop, category }: RankingTableProps) {
+const RankingTable = memo(function RankingTable({ title, items, isTop, category, onProductClick }: RankingTableProps) {
   return (
     <div className="rounded-xl border border-[var(--border-color)] bg-[var(--card-surface)] p-5">
       <div className="flex items-center gap-2 mb-4">
@@ -83,6 +82,7 @@ const RankingTable = memo(function RankingTable({ title, items, isTop, category 
                   <td className="py-3 px-2">
                     <Link
                       to={`/products/${item.product_id}`}
+                      onClick={() => onProductClick(item.product_id)}
                       className="font-medium hover:underline text-[var(--accent-primary)]"
                     >
                       {item.product_id}
@@ -183,16 +183,6 @@ export default function RankingPage() {
     };
   }, [storeId, range, category, inventoryStatus, topN, bottomN, refreshKey]);
 
-  const handleRowClick = (e: React.MouseEvent) => {
-    const target = e.target;
-    if (!(target instanceof HTMLElement)) return;
-    const link = target.closest('a');
-    if (link) {
-      const pid = link.textContent?.trim();
-      if (pid) setProductId(pid);
-    }
-  };
-
   const renderNSelector = (
     label: string,
     value: number,
@@ -253,9 +243,9 @@ export default function RankingPage() {
         error={error}
         onRetry={() => setRefreshKey((k) => k + 1)}
       >
-        <div className="grid grid-cols-1 gap-6" onClick={handleRowClick}>
-          <RankingTable title={`Top ${topN} 畅销品`} items={top} isTop category={category} />
-          <RankingTable title={`Bottom ${bottomN} 滞销品`} items={bottom} isTop={false} category={category} />
+        <div className="grid grid-cols-1 gap-6">
+          <RankingTable title={`Top ${topN} 畅销品`} items={top} isTop category={category} onProductClick={setProductId} />
+          <RankingTable title={`Bottom ${bottomN} 滞销品`} items={bottom} isTop={false} category={category} onProductClick={setProductId} />
         </div>
       </DataState>
     </div>

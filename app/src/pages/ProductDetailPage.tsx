@@ -34,9 +34,9 @@ import {
 import { useAnalysis } from '@/state/analysisContext';
 import type { Store, Product, ProductDetail, ProductHistoryRecord } from '@/types';
 import { cn } from '@/lib/utils';
+import { formatInt as fmt, formatDecimal } from '@/lib/format';
 
-const fmt = (n?: number | null) => (n != null && Number.isFinite(n) ? n.toLocaleString('zh-CN') : '-');
-const f1 = (n?: number | null) => (n != null && Number.isFinite(n) && !Number.isNaN(n) ? n.toFixed(1) : '-');
+const f1 = (n?: number | null) => formatDecimal(n, 1);
 
 interface SummaryCardsProps {
   data: ProductDetail;
