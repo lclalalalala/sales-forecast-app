@@ -127,16 +127,16 @@ function renderReplenishmentPage() {
 }
 
 describe('ReplenishmentPage', () => {
-  it('表格每行末尾显示“去下单”按钮，点击后以弹层形式打开补货表单', async () => {
+  it('表格每行末尾显示“下单补货”按钮，点击后以弹层形式打开补货表单', async () => {
     const user = userEvent.setup();
     renderReplenishmentPage();
 
     await waitFor(() => {
-      const buttons = screen.getAllByRole('button', { name: /去下单/ });
+      const buttons = screen.getAllByRole('button', { name: /下单补货/ });
       expect(buttons).toHaveLength(mockReplenishment.suggestions.length);
     });
 
-    const buttons = screen.getAllByRole('button', { name: /去下单/ });
+    const buttons = screen.getAllByRole('button', { name: /下单补货/ });
     await user.click(buttons[0]);
 
     await waitFor(() => {
@@ -153,14 +153,14 @@ describe('ReplenishmentPage', () => {
     renderReplenishmentPage();
 
     await waitFor(() => {
-      expect(screen.getAllByRole('button', { name: /去下单/ })).toHaveLength(3);
+      expect(screen.getAllByRole('button', { name: /下单补货/ })).toHaveLength(3);
     });
 
     await user.click(screen.getByRole('button', { name: '待补货' }));
-    expect(screen.getAllByRole('button', { name: /去下单/ })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: /下单补货/ })).toHaveLength(2);
 
     await user.click(screen.getByRole('button', { name: '全部商品' }));
-    expect(screen.getAllByRole('button', { name: /去下单/ })).toHaveLength(3);
+    expect(screen.getAllByRole('button', { name: /下单补货/ })).toHaveLength(3);
   });
 
   it('点击“建议补货量”表头可切换升降序', async () => {
@@ -168,7 +168,7 @@ describe('ReplenishmentPage', () => {
     renderReplenishmentPage();
 
     await waitFor(() => {
-      expect(screen.getAllByRole('button', { name: /去下单/ })).toHaveLength(3);
+      expect(screen.getAllByRole('button', { name: /下单补货/ })).toHaveLength(3);
     });
 
     const getIds = () =>
@@ -218,7 +218,7 @@ describe('ReplenishmentPage', () => {
     await user.click(screen.getByRole('button', { name: '重新加载' }));
 
     await waitFor(() => {
-      expect(screen.getAllByRole('button', { name: /去下单/ })).toHaveLength(3);
+      expect(screen.getAllByRole('button', { name: /下单补货/ })).toHaveLength(3);
     });
   });
 });

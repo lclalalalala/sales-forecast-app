@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState, useRef, memo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Package, AlertTriangle, TrendingUp, ShieldAlert,
-  ShoppingCart, Calculator, ChevronRight, ClipboardCheck,
+  ClipboardCheck,
 } from 'lucide-react';
 import { api } from '@/services/api';
 import { isAbortError, getErrorMessage } from '@/lib/errors';
@@ -252,25 +252,23 @@ const SuggestionTable = memo(function SuggestionTable({
             status={s.status}
             message={s.message}
           >
-            <Button variant="ghost" size="sm" className="h-8 px-2 text-[var(--accent-primary)]">
-              <Calculator className="w-3.5 h-3.5 mr-1" />
-              原因
+            <Button variant="ghost" size="sm" className="h-8 px-2 text-sky-400 hover:text-sky-500">
+              补货分析
             </Button>
           </ReasonDrawer>
           <Button
             size="sm"
-            variant="outline"
-            className="h-8"
+            variant="ghost"
+            className="h-8 px-2 text-sky-400 hover:text-sky-500"
             onClick={() => onOrderClick(s.product_id, s.suggested_replenishment)}
-            aria-label="去下单"
-            title="去下单"
+            aria-label="下单补货"
+            title="下单补货"
           >
-            <ShoppingCart className="w-3.5 h-3.5" />
+            下单补货
           </Button>
-          <Button asChild size="sm" variant="ghost" className="h-8 px-1">
+          <Button asChild size="sm" variant="ghost" className="h-8 px-2 text-sky-400 hover:text-sky-500">
             <Link to={`/products/${s.product_id}`} data-product-id={s.product_id}>
-              详情
-              <ChevronRight className="w-3 h-3" />
+              商品详情
             </Link>
           </Button>
         </div>
