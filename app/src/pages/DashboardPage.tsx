@@ -253,7 +253,7 @@ function createRankColumns(onProductClick: (productId: string) => void): DataTab
           onClick={() => onProductClick(item.product_id)}
           className="inline-flex items-center gap-0.5 text-xs text-[var(--accent-primary)] hover:underline"
         >
-          详情
+          商品详情
           <ChevronRight className="w-3 h-3" />
         </Link>
       ),
