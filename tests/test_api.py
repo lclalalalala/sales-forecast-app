@@ -169,6 +169,18 @@ class TestNewApiEndpoints:
         data = self._get_json("/api/overview?store_id=S001&range=invalid", expected_status=400)
         self._assert_error(data)
 
+    def test_unknown_store_returns_404(self):
+        """不存在的门店应返回 404 STORE_NOT_FOUND，而非 500。"""
+        for endpoint in [
+            "/api/overview?store_id=SXXX",
+            "/api/rankings?store_id=SXXX",
+            "/api/replenishment?store_id=SXXX",
+            "/api/products/P0001?store_id=SXXX",
+        ]:
+            data = self._get_json(endpoint, expected_status=404)
+            self._assert_error(data)
+            assert data["error"]["code"] == "STORE_NOT_FOUND"
+
     def test_context_date_range_present(self):
         for endpoint in [
             "/api/overview?store_id=S001&range=90d",

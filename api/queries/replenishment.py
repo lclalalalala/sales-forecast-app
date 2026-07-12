@@ -28,7 +28,7 @@ def get_replenishment():
         result = _query.execute(store_id, category)
         return responses.build_response(result["context"], result["data"])
     except requests.RequestValidationError as e:
-        return responses.build_error(e.code, e.message)
+        return responses.build_error(e.code, e.message, e.status_code)
     except Exception as e:
         return responses.build_internal_error(str(e))
 
@@ -56,7 +56,9 @@ class ReplenishmentQuery:
         """执行补货查询。"""
         as_of_date_str = self._replenishment_repository.get_latest_as_of_date(store_id)
         if as_of_date_str is None:
-            raise ValueError(f"门店 {store_id} 无数据")
+            raise requests.RequestValidationError(
+                "STORE_NOT_FOUND", f"门店 {store_id} 不存在或无数据", status_code=404
+            )
 
         suggestions = self._replenishment_repository.get_replenishments_by_store(
             store_id=store_id, category=category, as_of_date=as_of_date_str,

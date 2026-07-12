@@ -37,7 +37,7 @@ def get_products():
             for p in products
         ])
     except requests.RequestValidationError as e:
-        return responses.build_error(e.code, e.message)
+        return responses.build_error(e.code, e.message, e.status_code)
     except Exception as e:
         return responses.build_internal_error(str(e))
 
@@ -52,7 +52,7 @@ def get_product_detail(product_id: str):
         result = _query.execute(store_id, product_id, range_value)
         return responses.build_response(result["context"], result["data"])
     except requests.RequestValidationError as e:
-        return responses.build_error(e.code, e.message)
+        return responses.build_error(e.code, e.message, e.status_code)
     except Exception as e:
         return responses.build_internal_error(str(e))
 
@@ -85,7 +85,9 @@ class ProductDetailQuery:
         """执行商品详情查询。"""
         as_of_date_str = self._replenishment_repository.get_latest_as_of_date(store_id)
         if as_of_date_str is None:
-            raise ValueError(f"门店 {store_id} 无数据")
+            raise requests.RequestValidationError(
+                "STORE_NOT_FOUND", f"门店 {store_id} 不存在或无数据", status_code=404
+            )
 
         as_of_date = datetime.strptime(as_of_date_str, "%Y-%m-%d")
         product_info = self._dim.get_product_info(store_id, product_id)

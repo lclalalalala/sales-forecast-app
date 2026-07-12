@@ -38,7 +38,7 @@ def get_rankings():
         result = _query.execute(store_id, range_value, category, inventory_status, top_n, bottom_n)
         return responses.build_response(result["context"], result["data"])
     except requests.RequestValidationError as e:
-        return responses.build_error(e.code, e.message)
+        return responses.build_error(e.code, e.message, e.status_code)
     except Exception as e:
         return responses.build_internal_error(str(e))
 
@@ -72,7 +72,9 @@ class RankingQuery:
         """执行排名查询。"""
         as_of_date_str = self._replenishment.get_latest_as_of_date(store_id)
         if as_of_date_str is None:
-            raise ValueError(f"门店 {store_id} 无数据")
+            raise requests.RequestValidationError(
+                "STORE_NOT_FOUND", f"门店 {store_id} 不存在或无数据", status_code=404
+            )
 
         category_for_metrics = category if category else "all"
         date_range = self._sales_metrics.get_date_range(store_id, category_for_metrics)
