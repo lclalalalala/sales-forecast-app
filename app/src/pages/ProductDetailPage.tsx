@@ -155,7 +155,7 @@ const TrendChart = memo(function TrendChart({ data }: TrendChartProps) {
             <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
             <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--chart-axis-text)' }} tickLine={false} axisLine={{ stroke: 'var(--border-subtle)' }} />
             <YAxis tick={{ fontSize: 11, fill: 'var(--chart-axis-text)' }} tickLine={false} axisLine={{ stroke: 'var(--border-subtle)' }} />
-            <Tooltip contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '12px' }} />
+            <Tooltip contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '8px', fontSize: '12px' }} itemStyle={{ color: 'var(--text-primary)' }} labelStyle={{ color: 'var(--text-primary)' }} />
             <Legend wrapperStyle={{ fontSize: '12px', color: 'var(--text-secondary)' }} />
             <Line type="monotone" dataKey="units_sold" name="实际销量" stroke="var(--chart-sales)" strokeWidth={2} dot={false} activeDot={{ r: 3, fill: 'var(--chart-sales)' }} />
             <Line type="monotone" dataKey="demand" name="需求量" stroke="var(--chart-demand)" strokeWidth={2} strokeDasharray="4 4" dot={false} activeDot={{ r: 3, fill: 'var(--chart-demand)' }} />
@@ -185,7 +185,7 @@ const ForecastChart = memo(function ForecastChart({ days }: ForecastChartProps) 
             <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" vertical={false} />
             <XAxis dataKey="day" tick={{ fontSize: 12, fill: 'var(--chart-axis-text)' }} tickLine={false} axisLine={{ stroke: 'var(--border-subtle)' }} />
             <YAxis tick={{ fontSize: 12, fill: 'var(--chart-axis-text)' }} tickLine={false} axisLine={{ stroke: 'var(--border-subtle)' }} />
-            <Tooltip contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '12px' }} formatter={(v: number) => [`${v}`, '预测需求']} />
+            <Tooltip contentStyle={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '8px', fontSize: '12px' }} itemStyle={{ color: 'var(--text-primary)' }} labelStyle={{ color: 'var(--text-primary)' }} formatter={(v: number) => [`${v}`, '预测需求']} />
             <Bar dataKey="predicted" name="预测需求量" fill="var(--chart-forecast)" radius={[6, 6, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>

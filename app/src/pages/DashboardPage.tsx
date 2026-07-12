@@ -247,9 +247,10 @@ const TrendChart = memo(function TrendChart({ trend, category, days }: TrendChar
                 background: 'var(--bg-surface)',
                 border: '1px solid var(--border-subtle)',
                 borderRadius: '8px',
-                color: 'var(--text-primary)',
                 fontSize: '12px',
               }}
+              itemStyle={{ color: 'var(--text-primary)' }}
+              labelStyle={{ color: 'var(--text-primary)' }}
             />
             <Legend wrapperStyle={{ fontSize: '12px', color: 'var(--text-secondary)' }} />
             <Line type="monotone" dataKey="units_sold" name="实际销量" stroke="var(--chart-sales)" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: 'var(--chart-sales)' }} />

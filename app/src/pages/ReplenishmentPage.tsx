@@ -47,8 +47,9 @@ const MiniChart = memo(function MiniChart({ predictions, pid }: MiniChartProps) 
               border: '1px solid var(--border-subtle)',
               borderRadius: '6px',
               fontSize: '11px',
-              color: 'var(--text-primary)',
             }}
+            itemStyle={{ color: 'var(--text-primary)' }}
+            labelStyle={{ color: 'var(--text-primary)' }}
             formatter={(v: number) => [`${v}`, '预测']}
             labelFormatter={() => ''}
           />
