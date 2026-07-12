@@ -17,7 +17,7 @@ import type {
   Store,
 } from '@/types';
 
-const API_BASE = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8999/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8999/api';
 const DEFAULT_TIMEOUT = 15_000;
 
 interface ApiEnvelope<T> {

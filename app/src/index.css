@@ -197,14 +197,14 @@ body,
   min-height: 100vh;
 }
 
-/* 主题过渡动画（设计系统：250ms ease-in-out） */
+/* 主题过渡动画（设计系统：250ms ease-in-out）
+   仅过渡合成友好的颜色属性，避免 box-shadow 等非合成属性触发重排/重绘 */
 * {
   transition: background-color 250ms ease-in-out,
               border-color 250ms ease-in-out,
               color 250ms ease-in-out,
               fill 250ms ease-in-out,
-              stroke 250ms ease-in-out,
-              box-shadow 250ms ease-in-out;
+              stroke 250ms ease-in-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
