@@ -10,9 +10,13 @@ import sys
 
 import pandas as pd
 
+from offline_calculation.config import OfflineConfig
 
-def verify(output_dir: str) -> bool:
+
+def verify(output_dir: str, config: OfflineConfig = None) -> bool:
     """校验离线计算输出。"""
+    if config is None:
+        config = OfflineConfig.from_file()
     expected_files = [
         "data_quality_report.json",
         "data_quality_report.csv",
@@ -43,10 +47,14 @@ def verify(output_dir: str) -> bool:
         print("[FAIL] fact_daily_inventory_sales closing_inventory 计算错误")
         all_ok = False
 
-    # 校验 fact_lead_time K 范围
+    # 校验 fact_lead_time K 范围（从配置读取上下界，避免写死）
+    min_k = config.lead_time_min_days
+    max_k = config.lead_time_max_days
     lead_time = pd.read_csv(os.path.join(output_dir, "fact_lead_time.csv"))
-    if not ((lead_time["lead_time_days"] >= 0) & (lead_time["lead_time_days"] <= 7)).all():
-        print("[FAIL] fact_lead_time lead_time_days 超出 [0, 7] 范围")
+    if not (
+        (lead_time["lead_time_days"] >= min_k) & (lead_time["lead_time_days"] <= max_k)
+    ).all():
+        print(f"[FAIL] fact_lead_time lead_time_days 超出 [{min_k}, {max_k}] 范围")
         all_ok = False
 
     # 校验补货推荐非负

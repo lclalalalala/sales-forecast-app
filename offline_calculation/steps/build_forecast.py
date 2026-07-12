@@ -8,8 +8,7 @@
 
 import os
 import sys
-from datetime import datetime, timedelta
-from typing import Dict, List
+from datetime import datetime
 
 import pandas as pd
 
@@ -19,6 +18,7 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from forecast.batch import run as forecast_batch_run
+from forecast.utils import compute_error_std_by_origin
 
 
 def build_forecast(
@@ -55,8 +55,9 @@ def build_forecast(
         return forecast_df
 
     # 使用配置的 error_horizon 和 error_window_days 重新计算预测区间
-    error_std_df = _compute_error_std_by_origin(
-        forecast_df, error_window_days, error_horizon
+    # 复用 forecast.utils 的共享实现（horizon 过滤按固定 error_horizon）
+    error_std_df = compute_error_std_by_origin(
+        forecast_df, error_window_days, horizon=error_horizon
     )
     forecast_df = forecast_df.drop(columns=["lower_bound", "upper_bound"], errors="ignore")
     forecast_df = forecast_df.merge(
@@ -77,44 +78,3 @@ def build_forecast(
         "model_version", "calculated_at",
     ]
     return forecast_df[cols]
-
-
-def _compute_error_std_by_origin(
-    forecast_df: pd.DataFrame,
-    error_window_days: int,
-    error_horizon: int,
-    default_sigma: float = 1.0,
-) -> pd.DataFrame:
-    """
-    对每个 (store, product, origin_date)，使用固定 horizon=3 的有效误差
-    在 error_window_days 窗口内计算样本标准差。
-    """
-    df = forecast_df.copy()
-    df["origin_dt"] = pd.to_datetime(df["forecast_origin_date"])
-    df["forecast_dt"] = pd.to_datetime(df["forecast_date"])
-    df["horizon"] = (df["forecast_dt"] - df["origin_dt"]).dt.days
-    horizon_df = df[(df["horizon"] == error_horizon) & (df["forecast_error"].notna())].copy()
-
-    rows: List[Dict] = []
-    for (store_id, product_id), group in horizon_df.groupby(["store_id", "product_id"]):
-        group = group.sort_values("origin_dt").reset_index(drop=True)
-        for origin_dt in group["origin_dt"].unique():
-            window_start = origin_dt - timedelta(days=error_window_days - 1)
-            window_errors = group[
-                (group["origin_dt"] >= window_start)
-                & (group["origin_dt"] <= origin_dt)
-            ]["forecast_error"].astype(float)
-
-            if len(window_errors) < 2:
-                sigma = default_sigma
-            else:
-                sigma = float(window_errors.std(ddof=1))
-
-            rows.append({
-                "store_id": store_id,
-                "product_id": product_id,
-                "forecast_origin_date": origin_dt.strftime("%Y-%m-%d"),
-                "error_std": sigma,
-            })
-
-    return pd.DataFrame(rows)

@@ -27,7 +27,6 @@ SAFETY_STOCK_Z = 2.33
 LEAD_TIME_WINDOW_DAYS = 90
 ERROR_HORIZON = 3
 ERROR_WINDOW_DAYS = 30
-FORECAST_HORIZON_DAYS = 7
 FORECAST_WINDOW_DAYS = 33
 
 LEAD_TIME_MIN_DAYS = 0
@@ -95,6 +94,12 @@ class OfflineConfig:
     def safety_stock_insufficient_std(self) -> float:
         return float(
             self._config.get("safety_stock", {}).get("insufficient_error_std", INSUFFICIENT_ERROR_STD)
+        )
+
+    @property
+    def safety_stock_min_error_count(self) -> int:
+        return int(
+            self._config.get("safety_stock", {}).get("min_error_count", MIN_ERROR_COUNT_FOR_STD)
         )
 
     @property

@@ -79,7 +79,7 @@ $$
 
 其中 \(\hat{y}_{D}\) 为对应 `(origin_date, forecast_date)` 上的点预测值。
 
-对补货基准日 `T`，取**固定提前期 horizon=3** 的历史预测误差，并在过去 **30 个自然日**的滚动窗口内计算样本标准差：
+对补货基准日 `T`，取**固定提前期 horizon=3** 的历史预测误差，并在过去 **`safety_stock.error_window_days`（默认 90 个自然日）**的滚动窗口内计算样本标准差：
 
 $$
 \sigma_e = \sqrt{\frac{\sum_{D}(e_D - \bar{e})^2}{n-1}}
@@ -87,13 +87,15 @@ $$
 
 其中：
 - 仅使用 `forecast_date - forecast_origin_date == 3` 的预测误差；
-- 窗口为 `[T - 29, T]`（共 30 个自然日），按 `forecast_origin_date` 落在窗口内的误差样本计算；
+- 窗口为 `[T - (W-1), T]`（\(W\) = `safety_stock.error_window_days`，默认 90 个自然日），按 `forecast_origin_date` 落在窗口内的误差样本计算；
 - \(n\) 为有效误差样本数，\(\bar{e}\) 为误差均值（样本标准差，ddof=1）。
 
-- 若有效误差少于 2 个，使用 fallback 值 `sigma = 1.0`，并在 `fact_forecast_error_stats.std_source` 中标记为 `fallback_1`；
+- 若有效误差少于 `safety_stock.min_error_count`（默认 2）个，使用 fallback 值 `sigma = 1.0`，并在 `fact_forecast_error_stats.std_source` 中标记为 `fallback_1`；
 - 否则标记为 `calculated`。
 
-误差统计结果持久化到 `fact_forecast_error_stats.csv`。该表除 `as_of_date`、`store_id`、`product_id`、`error_std` 外，还包含 `horizon`（固定值 `3`）与 `window_days`（固定值 `30`）字段，用于明确 sigma 的统计口径。补货计算与安全库存服务直接读取该表。
+> **窗口口径说明**：安全库存 σ 服务于“提前期内需求波动”，采用较长的 `safety_stock.error_window_days`（默认 90 天）以获得更稳健的标准差估计；这与预测**区间上下界**所用的 `forecast.error_window_days`（默认 30 天）是两个独立配置，不要混用。
+
+误差统计结果持久化到 `fact_forecast_error_stats.csv`。该表除 `as_of_date`、`store_id`、`product_id`、`error_std` 外，还包含 `horizon`（固定值 `3`）与 `window_days`（等于 `safety_stock.error_window_days`，默认 `90`）字段，用于明确 sigma 的统计口径。补货计算与安全库存服务直接读取该表。
 
 ### 3.3 补货滞后参数 `K`
 
@@ -105,6 +107,12 @@ $$
 
 **计算方式**：
 1. 组合级别 `k[Store][Product]`：基于该 `(Store, Product)` 最近 90 天历史数据估计；
+2. 对候选 `k ∈ [min_days, max_days]`，用库存平衡方程
+   `opening_{t+1} = opening_t − units_sold_t + units_ordered_{t−k}` 逐日预测次日期初库存，
+   取使 MSE 最小的 `k`（MSE 相同时取较大的 `k`）；
+3. 平衡方程仅在**相邻两条观测记录恰好相差 1 天**时成立，因此跨观测缺口（相差 >1 天）的
+   行对会被跳过，避免缺口引入错误残差污染 MSE；
+4. 若窗口内无任何可用相邻行对，`k_source` 记为 `default`，回退 `lead_time.fallback_days`。
 
 
 
@@ -171,12 +179,14 @@ lead_time:
 
 safety_stock:
   service_level_z: 2.33
-  error_window_days: 30
+  error_window_days: 90        # 安全库存 σ 的误差滚动窗口（区别于 forecast.error_window_days）
   insufficient_error_std: 1
+  min_error_count: 2           # 窗口内有效误差少于该值时回退 insufficient_error_std
 
 forecast:
   error_horizon: 3
-  error_window_days: 30
+  error_window_days: 30        # 预测区间上下界的误差滚动窗口
+  forecast_window_days: 33
 
 offline:
   output_dir: data/processed_data
@@ -198,7 +208,7 @@ inventory_status:
 ## 6.0 前置约定
 
 - **当日 `T`**：本次计算的基准日期，默认取组合可用数据的最新一天减去 `offline.as_of_date_offset_days`（当前为 7 天），与在线服务读取预计算表时使用的 `as_of_date` 保持一致。
-- **历史窗口**：日均销量、`k` 估计取最近 90 天；预测误差标准差取**固定 horizon=3 + 最近 30 天**滚动窗口；两者均按“不足则用全部可用数据”处理。
+- **历史窗口**：日均销量、`k` 估计取最近 90 天；预测误差标准差取**固定 horizon=3 + `safety_stock.error_window_days`（默认 90 天）**滚动窗口；两者均按“不足则用全部可用数据”处理。
 - **数据来源**：`Date + Store ID + Product ID` 粒度的 `Inventory Level`、`Units Sold`、`Units Ordered`，字段含义见《数据探索说明文档》。
 - **依赖关系**：后序步骤依赖前序步骤的输出，须按下列顺序执行。
 
@@ -251,8 +261,8 @@ inventory_status:
 ### 步骤 6：预测误差统计
 
 - **输入**：`fact_forecast.csv` 中每个 `(store_id, product_id)` 组合的历史预测误差（`forecast_error` 字段）。
-- **计算**：对补货基准日 `T`，取**固定 horizon=3** 的预测误差，并在过去 **30 个自然日**的 `forecast_origin_date` 窗口内按第 3.2 节计算样本标准差 $\sigma_e$；有效误差少于 2 个时 fallback 为 `1.0`。
-- **输出**：$\sigma_e$ 持久化到 `fact_forecast_error_stats.csv`，供步骤 7 使用。
+- **计算**：对补货基准日 `T`，取**固定 horizon=3** 的预测误差，并在过去 **`safety_stock.error_window_days`（默认 90 个自然日）**的 `forecast_origin_date` 窗口内按第 3.2 节计算样本标准差 $\sigma_e$；有效误差少于 `safety_stock.min_error_count`（默认 2）个时 fallback 为 `1.0`。
+- **输出**：$\sigma_e$ 持久化到 `fact_forecast_error_stats.csv`，供步骤 7 使用。当补货基准日 `T` 在该表无精确匹配记录时，步骤 7 回退到该组合中 **`as_of_date ≤ T`** 的最近一条 σ，绝不使用未来（`as_of_date > T`）的统计值，避免信息泄漏。
 
 ### 步骤 7：安全库存计算
 

@@ -28,13 +28,16 @@ def build_product_sales_summary(
     fact["date"] = pd.to_datetime(fact["date"])
     as_of_dt = pd.Timestamp(as_of_date)
 
-    # 获取每个 (store, product) 在 as_of_date 的最新补货记录
+    # 获取每个 (store, product) 在 as_of_date（含）之前最近一条补货记录。
+    # 用 <= 而非 == 精确匹配，可覆盖“最近无观测”的滞销商品——其最新补货日期
+    # 早于 as_of_date，否则会错误回退到 0 库存 / undetermined。
     repl = replenishment_df.copy()
     repl["as_of_dt"] = pd.to_datetime(repl["as_of_date"])
-    latest_repl = repl[repl["as_of_dt"] == as_of_dt].copy()
+    eligible = repl[repl["as_of_dt"] <= as_of_dt]
     repl_map = {}
-    if not latest_repl.empty:
-        for _, row in latest_repl.iterrows():
+    if not eligible.empty:
+        latest_idx = eligible.groupby(["store_id", "product_id"])["as_of_dt"].idxmax()
+        for _, row in eligible.loc[latest_idx].iterrows():
             repl_map[(row["store_id"], row["product_id"])] = {
                 "current_inventory": int(row["current_inventory"]),
                 "in_transit_inventory": int(row["in_transit_inventory"]),

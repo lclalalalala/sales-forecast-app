@@ -69,11 +69,19 @@ def build_daily_replenishment(
     error_stats_df["as_of_dt"] = pd.to_datetime(error_stats_df["as_of_date"])
     error_indexed = error_stats_df.set_index(["store_id", "product_id", "as_of_dt"])
 
+    # 预构建 σ 回退表: (store, product) -> 按 as_of_dt 升序的 (as_of_dt, error_std) 列表
+    # 避免在主循环内对整表反复过滤（性能），并支持“仅使用历史误差”的回退。
+    error_fallback_map: Dict = {}
+    for (s_id, p_id), grp in error_stats_df.groupby(["store_id", "product_id"]):
+        grp_sorted = grp.sort_values("as_of_dt")
+        error_fallback_map[(s_id, p_id)] = list(
+            zip(grp_sorted["as_of_dt"], grp_sorted["error_std"].astype(float))
+        )
+
     fact = fact.copy()
     fact["date"] = pd.to_datetime(fact["date"])
-    observed = fact[fact["is_observed"]].copy()
 
-    # 使用 as_of_date 过滤观察日期，与调用方意图一致
+    # 使用 as_of_date 作为观察窗口上界，与调用方意图一致
     as_of_ts = pd.Timestamp(as_of_date)
     max_date = min(fact["date"].max(), as_of_ts)
 
@@ -90,19 +98,21 @@ def build_daily_replenishment(
 
         group = group.sort_values("date").reset_index(drop=True)
 
-        # 只对最近 forecast_window_days 天的观测日期计算补货推荐
-        # （更早的日期没有预测数据，计算也是空跑）
+        # 只对最近 forecast_window_days 天且不晚于 max_date 的观测日期计算补货推荐
+        # （更早的日期没有预测数据，晚于 max_date 的日期超出基准窗口）
         output_window_start = max_date - timedelta(days=config.forecast_window_days)
-        observed_group = group[group["is_observed"] & (group["date"] >= output_window_start)].copy()
+        observed_group = group[
+            group["is_observed"]
+            & (group["date"] >= output_window_start)
+            & (group["date"] <= max_date)
+        ].copy()
         for i, row in observed_group.iterrows():
             d = row["date"]
 
             current_inventory = int(row["opening_inventory"]) - int(row["units_sold"])
 
             in_transit = _calc_in_transit(
-                fact,
-                store_id,
-                product_id,
+                group,
                 d,
                 k_effective,
             )
@@ -128,19 +138,19 @@ def build_daily_replenishment(
             if not missing_forecast:
                 forecast_status = "ready"
 
-            # 误差标准差：优先使用精确日期，否则回退到该组合最新可用误差 std
+            # 误差标准差：优先使用精确日期，否则回退到该组合“不晚于 d”的最近误差 std，
+            # 避免使用未来（as_of_dt > d）的误差统计造成信息泄漏。
             error_key = (store_id, product_id, d)
             if error_key in error_indexed.index:
                 sigma = float(error_indexed.loc[error_key, "error_std"])
             else:
-                combo_errors = error_stats_df[
-                    (error_stats_df["store_id"] == store_id)
-                    & (error_stats_df["product_id"] == product_id)
-                ]
-                if combo_errors.empty:
+                combo = error_fallback_map.get((store_id, product_id), [])
+                past_std = [std for (ts, std) in combo if ts <= d]
+                if not past_std:
                     sigma = config.safety_stock_insufficient_std
                 else:
-                    sigma = float(combo_errors.sort_values("as_of_dt").iloc[-1]["error_std"])
+                    # combo 已按 as_of_dt 升序，取最后一个即“不晚于 d”的最近值
+                    sigma = float(past_std[-1])
 
             safety_stock = z * sigma * math.sqrt(k_effective)
 
@@ -187,7 +197,9 @@ def build_daily_replenishment(
                 "forecast_7d_total": round(forecast_7d_total, 1),
                 "safety_stock": round(safety_stock, 1),
                 "error_std": sigma,
-                "avg_daily_units_sold_90d": round(avg_daily, 2),
+                # 日均销量窗口由 config.default_time_range_days 决定，
+                # 列名不再写死 90d，避免配置调整后名实不符。
+                "avg_daily_units_sold": round(avg_daily, 2),
                 "coverage_days": None if coverage_days is None else round(coverage_days, 1),
                 "inventory_status": inventory_status,
                 "suggested_replenishment": suggested_replenishment,
@@ -203,13 +215,15 @@ def build_daily_replenishment(
 
 
 def _calc_in_transit(
-    fact: pd.DataFrame,
-    store_id: str,
-    product_id: str,
+    group: pd.DataFrame,
     inventory_date: datetime,
     k_effective: int,
 ) -> int:
-    """计算在途库存。"""
+    """计算在途库存。
+
+    group 已是单个 (store, product) 的事实行子集，无需再按门店/商品过滤，
+    避免在主循环内对整表反复扫描。
+    """
     k = max(1, int(k_effective))
     if k <= 1:
         return 0
@@ -217,13 +231,8 @@ def _calc_in_transit(
     start_date = inventory_date - timedelta(days=k - 1)
     end_date = inventory_date - timedelta(days=1)
 
-    mask = (
-        (fact["store_id"] == store_id)
-        & (fact["product_id"] == product_id)
-        & (fact["date"] >= start_date)
-        & (fact["date"] <= end_date)
-    )
-    subset = fact[mask]
+    mask = (group["date"] >= start_date) & (group["date"] <= end_date)
+    subset = group[mask]
     if subset.empty:
         return 0
     return int(subset["units_ordered"].sum())

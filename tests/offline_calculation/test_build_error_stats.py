@@ -17,7 +17,7 @@ from offline_calculation.steps.load_validate import load_and_validate
 
 
 class TestBuildErrorStats(unittest.TestCase):
-    """测试 horizon=3 / 30 天误差标准差计算。"""
+    """测试 horizon=3 误差标准差计算，使用安全库存误差窗口。"""
 
     def setUp(self):
         self.fixture_path = os.path.join(
@@ -48,7 +48,11 @@ class TestBuildErrorStats(unittest.TestCase):
 
             self.assertFalse(error_stats_df.empty)
             self.assertTrue((error_stats_df["horizon"] == 3).all())
-            self.assertTrue((error_stats_df["window_days"] == 30).all())
+            # 误差统计表服务于安全库存 σ，应使用 safety_stock.error_window_days(90)
+            self.assertTrue(
+                (error_stats_df["window_days"] == self.config.safety_stock_error_window_days).all()
+            )
+            self.assertEqual(self.config.safety_stock_error_window_days, 90)
 
 
 if __name__ == "__main__":

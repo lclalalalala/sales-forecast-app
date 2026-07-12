@@ -91,6 +91,39 @@ class TestComputeErrorStdByOrigin(unittest.TestCase):
         last = result[result["forecast_origin_date"] == "2024-01-19"]
         self.assertGreater(float(last.iloc[0]["error_std"]), 0)
 
+    def _make_multi_horizon_df(self):
+        """每个 origin 同时有 horizon=1（误差恒为 100）与 horizon=3（误差=origin_day）。"""
+        rows = []
+        for origin_day in range(1, 11):
+            origin_date = date(2024, 1, origin_day)
+            for h, err in [(1, 100.0), (3, float(origin_day))]:
+                fdate = origin_date + timedelta(days=h)
+                rows.append({
+                    "forecast_origin_date": origin_date.strftime("%Y-%m-%d"),
+                    "forecast_date": fdate.strftime("%Y-%m-%d"),
+                    "store_id": "S001",
+                    "product_id": "P001",
+                    "forecast_units_sold": 10.0,
+                    "actual_units_sold": 10.0,
+                    "forecast_error": err,
+                    "status": "ready",
+                    "model_version": "test",
+                    "calculated_at": "2024-01-01T00:00:00",
+                })
+        return pd.DataFrame(rows)
+
+    def test_horizon_filter_uses_only_matching_horizon(self):
+        """指定 horizon 时应仅使用该 horizon 的误差计算 std。"""
+        df = self._make_multi_horizon_df()
+        res_h1 = compute_error_std_by_origin(df, error_window_days=30, horizon=1)
+        res_h3 = compute_error_std_by_origin(df, error_window_days=30, horizon=3)
+
+        # horizon=1 误差恒为 100 → 样本 std=0；horizon=3 误差随 origin 变化 → std>0
+        last_h1 = res_h1[res_h1["forecast_origin_date"] == "2024-01-10"].iloc[0]["error_std"]
+        last_h3 = res_h3[res_h3["forecast_origin_date"] == "2024-01-10"].iloc[0]["error_std"]
+        self.assertEqual(float(last_h1), 0.0)
+        self.assertGreater(float(last_h3), 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

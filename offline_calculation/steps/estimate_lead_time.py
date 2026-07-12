@@ -117,6 +117,13 @@ def _estimate_single(
             t_row = group.iloc[i]
             t1_row = group.iloc[i + 1]
             t_date = t_row["date"]
+
+            # 库存平衡方程 opening_{t+1} = opening_t - sold_t + ordered_{t-k}
+            # 仅在相邻两行恰好相差 1 天时成立；observed 存在观测缺口，
+            # 跨缺口配对会引入错误的残差，需跳过。
+            if (t1_row["date"] - t_date).days != 1:
+                continue
+
             tk_date = t_date - timedelta(days=k)
 
             units_ordered_tk = 0

@@ -68,6 +68,51 @@ class TestBuildReplenishment(unittest.TestCase):
             expected_safety = self.config.safety_stock_z * row["error_std"] * math.sqrt(k)
             self.assertAlmostEqual(row["safety_stock"], expected_safety, places=1)
 
+    def test_sigma_fallback_ignores_future_error_stats(self):
+        """σ 回退应仅使用 as_of_dt <= d 的历史误差，避免使用未来值造成信息泄漏。"""
+        dates = pd.date_range("2026-01-10", "2026-01-15", freq="D")
+        fact = pd.DataFrame({
+            "store_id": "S001",
+            "product_id": "P001",
+            "category": "cat",
+            "date": dates,
+            "is_observed": True,
+            "opening_inventory": 100,
+            "units_sold": 5,
+            "units_ordered": 0,
+        })
+        lead_time_df = pd.DataFrame([{
+            "store_id": "S001", "product_id": "P001",
+            "lead_time_days": 2, "effective_lead_time_days": 2, "k_source": "estimated",
+        }])
+        forecast_df = pd.DataFrame(columns=[
+            "store_id", "product_id", "forecast_origin_date",
+            "forecast_date", "forecast_units_sold",
+        ])
+        # 历史误差 std=3.0（1/12），未来误差 std=999.0（1/20）
+        error_stats_df = pd.DataFrame([
+            {"as_of_date": "2026-01-12", "store_id": "S001",
+             "product_id": "P001", "error_std": 3.0},
+            {"as_of_date": "2026-01-20", "store_id": "S001",
+             "product_id": "P001", "error_std": 999.0},
+        ])
+        as_of_date = dates.max()
+
+        repl_df = build_daily_replenishment(
+            fact, lead_time_df, forecast_df, error_stats_df,
+            config=self.config, as_of_date=as_of_date,
+            data_version="v1", model_version="ensemble_v2",
+            calculated_at=datetime.now(),
+        )
+
+        # 1/13、1/14、1/15 无精确误差匹配，应回退到历史 std=3.0，绝不使用未来的 999.0
+        later = repl_df[repl_df["as_of_date"].isin(
+            ["2026-01-13", "2026-01-14", "2026-01-15"]
+        )]
+        self.assertFalse(later.empty)
+        self.assertTrue((later["error_std"] == 3.0).all())
+        self.assertFalse((repl_df["error_std"] == 999.0).any())
+
 
 if __name__ == "__main__":
     unittest.main()

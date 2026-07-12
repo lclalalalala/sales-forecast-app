@@ -17,6 +17,7 @@ safety_stock:
   service_level_z: 2.33
   error_window_days: 90
   insufficient_error_std: 1
+  min_error_count: 2
 
 forecast:
   error_horizon: 3

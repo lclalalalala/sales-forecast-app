@@ -2,7 +2,7 @@
 构建预测误差统计表 - offline_calculation/steps/build_error_stats.py
 =================================================================
 
-基于 fact_forecast 中 horizon=3 的有效误差，滚动 30 天窗口计算 sigma。
+基于 fact_forecast 中 horizon=3 的有效误差，滚动安全库存误差窗口（默认 90 天）计算 sigma。
 """
 
 from datetime import datetime, timedelta
@@ -31,9 +31,11 @@ def build_error_stats(
         ])
 
     error_horizon = config.forecast_error_horizon
-    error_window_days = config.forecast_error_window_days
+    # 误差统计表服务于安全库存 σ，使用安全库存误差窗口（90 天），
+    # 而非预测短期误差窗口（30 天）。
+    error_window_days = config.safety_stock_error_window_days
     insufficient_std = config.safety_stock_insufficient_std
-    min_count = 2
+    min_count = config.safety_stock_min_error_count
 
     df = forecast_df.copy()
     df["origin_dt"] = pd.to_datetime(df["forecast_origin_date"])
