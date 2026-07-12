@@ -412,16 +412,6 @@ export default function ReplenishmentPage() {
           onProductClick={handleProductClick}
           onOrderClick={handleOrderClick}
         />
-
-        <div className="mt-6 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-primary)] p-5">
-          <h4 className="text-sm font-semibold mb-2 text-[var(--text-primary)]">计算说明</h4>
-          <ul className="text-xs space-y-1 list-disc pl-4 text-[var(--text-secondary)]">
-            <li>提前期 K：通过库存平衡方程 MSE 估计，默认 fallback 为 2 天</li>
-            <li>在途库存：前 K-1 天 Units Ordered 之和</li>
-            <li>安全库存：2.33 × 滚动预测误差标准差 × √K</li>
-            <li>建议补货量 = ceil(max(0, 未来 K 天预测 + 安全库存 - 当前库存 - 在途库存))</li>
-          </ul>
-        </div>
       </DataState>
 
       <Dialog open={!!orderItem} onOpenChange={(open) => { if (!open) setOrderItem(null); }}>
