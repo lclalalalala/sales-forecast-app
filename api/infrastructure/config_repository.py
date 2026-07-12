@@ -9,12 +9,10 @@ from typing import Any, Dict
 
 import yaml
 
+from infrastructure.utils import resource_base
 
-_CONFIG_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "config",
-    "business.yaml",
-)
+
+_CONFIG_PATH = os.path.join(resource_base(), "config", "business.yaml")
 
 
 def _load_config() -> Dict[str, Any]:

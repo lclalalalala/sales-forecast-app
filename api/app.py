@@ -17,7 +17,7 @@
 import os
 import sys
 
-from flask import Flask
+from flask import Flask, request
 from flask_cors import CORS
 
 # 将 api/ 目录加入路径，使蓝图的绝对导入（infrastructure/schemas/queries）可解析
@@ -26,6 +26,7 @@ sys.path.insert(0, project_root)
 
 from infrastructure.dim_repository import dim_repository
 from infrastructure.inventory_sales_repository import inventory_sales_repository
+from infrastructure.utils import resource_base
 from schemas import responses
 from queries.overview import overview_bp
 from queries.ranking import ranking_bp
@@ -34,7 +35,11 @@ from queries.replenishment import replenishment_bp
 
 
 # ─── Flask 应用初始化 ──────────────────────────────────────────
-app = Flask(__name__)
+# static_folder 指向前端构建产物 app/dist（打包态由 resource_base 定位到解包目录）。
+# static_url_path="" 使 /assets/*.js、/*.css 等静态资源直接从根路径提供。
+_DIST_DIR = os.path.join(resource_base(), "app", "dist")
+app = Flask(__name__, static_folder=_DIST_DIR, static_url_path="")
+# 桌面打包为同源访问，CORS 仅对开发态（前端 3000、后端独立端口）有意义，保留无副作用。
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # ─── 注册查询蓝图 ──────────────────────────────────────────────
@@ -42,6 +47,28 @@ app.register_blueprint(overview_bp)
 app.register_blueprint(ranking_bp)
 app.register_blueprint(product_bp)
 app.register_blueprint(replenishment_bp)
+
+
+# ─── 前端托管（SPA）───────────────────────────────────────────
+
+@app.route("/")
+def _spa_index():
+    """根路径返回前端入口页。"""
+    return app.send_static_file("index.html")
+
+
+@app.errorhandler(404)
+def _spa_fallback(err):
+    """未命中的路径：
+    - /api/* 未匹配 → 返回结构化 404 错误。
+    - 其余（前端路由，如 /products/xxx）→ 回退到 index.html，交由 React Router 处理。
+    """
+    if request.path.startswith("/api/"):
+        return responses.build_error("NOT_FOUND", "接口不存在", 404)
+    index_path = os.path.join(_DIST_DIR, "index.html")
+    if os.path.isfile(index_path):
+        return app.send_static_file("index.html")
+    return err
 
 
 # ─── 元数据接口（蓝图未覆盖，context=null）────────────────────

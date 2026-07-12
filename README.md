@@ -54,6 +54,24 @@ npm run dev
 # 前端运行在 http://localhost:5173
 ```
 
+### 4. 打包为桌面应用（可选）
+
+将前后端打包为 macOS / Windows 原生应用，双击即用：
+
+```bash
+conda activate dev
+pip install -r requirements-desktop.txt
+cd app && npm install && cd ..
+
+# macOS
+./build_mac.sh          # 产物：dist/库存预测系统.app
+
+# Windows
+build_win.bat           # 产物：dist\库存预测系统.exe
+```
+
+详见 [project_docs/09-Desktop-Packaging.md](project_docs/09-Desktop-Packaging.md)。
+
 ## API 接口
 
 | 路径 | 说明 |

@@ -4,16 +4,29 @@
 """
 
 import os
+import sys
 from datetime import date, datetime
+
+
+def resource_base() -> str:
+    """返回资源（数据、配置、前端静态文件）的根目录。
+
+    - PyInstaller 冻结环境：解包目录 ``sys._MEIPASS``（打包进去的 data/config/app 等）。
+    - 开发环境：项目根目录（本文件位于 ``<root>/api/infrastructure/utils.py``，上溯三级）。
+
+    所有依赖磁盘资源的路径都应基于此函数，以保证开发态与打包态一致。
+    """
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        return meipass
+    return os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
 
 
 def default_data_dir() -> str:
     """返回默认的预计算数据目录路径。"""
-    return os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        "data",
-        "processed_data",
-    )
+    return os.path.join(resource_base(), "data", "processed_data")
 
 
 def normalize_date(value) -> str:

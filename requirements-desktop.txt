@@ -1,0 +1,6 @@
+# 桌面打包依赖（在运行时依赖 requirements.txt 之外）
+# 安装：conda activate dev && pip install -r requirements-desktop.txt
+-r requirements.txt
+
+pywebview==6.2.1   # 原生窗口（macOS 用 WebKit，Windows 用 WebView2/EdgeChromium）
+pyinstaller==6.21.0 # 打包为单可执行文件

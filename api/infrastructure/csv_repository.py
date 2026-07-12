@@ -11,6 +11,8 @@ from typing import List, Dict, Optional
 
 import pandas as pd
 
+from infrastructure.utils import resource_base
+
 
 class CsvRepository:
     """
@@ -47,10 +49,7 @@ class CsvRepository:
             data_path: CSV 文件路径，默认定位到项目根目录 data/sales_data.csv
         """
         if data_path is None:
-            project_root = os.path.dirname(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            )
-            data_path = os.path.join(project_root, "data", "sales_data.csv")
+            data_path = os.path.join(resource_base(), "data", "sales_data.csv")
 
         self._data_path = data_path
         self._df: Optional[pd.DataFrame] = None
