@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="theme-light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>系统分层架构与核心计算逻辑 · 技术说明</title>
+<style>
+  /* ============================================================
+     设计系统 Token —— 与 app/src/index.css 保持一致
+     ============================================================ */
+  :root, .theme-light {
+    --bg-page:#FAFAFA; --bg-surface:#FFFFFF; --bg-surface-hover:#F5F5F5;
+    --border-subtle:#E8E8EC; --border-focus:#6366F1;
+    --text-primary:#0A0A0A; --text-secondary:#6B6B6B; --text-tertiary:#9C9C9C;
+    --accent-primary:#6366F1; --accent-primary-hover:#4F46E5; --accent-secondary:#20970B;
+    --accent-warning:#F59E0B; --accent-error:#EF4444;
+    --status-bg-success:rgba(32,151,11,.10); --status-bg-info:rgba(99,102,241,.10);
+    --status-bg-warning:rgba(245,158,11,.10); --status-bg-error:rgba(239,68,68,.10);
+    --chart-sales:#6366F1; --chart-forecast:#9333EA; --chart-inventory:#F59E0B;
+    --shadow-card-hover:0 8px 30px rgba(0,0,0,.08);
+    --radius-md:6px; --radius-lg:8px; --radius-xl:12px;
+    color-scheme:light;
+  }
+  .theme-dark {
+    --bg-page:#121212; --bg-surface:#1E1E1E; --bg-surface-hover:#2A2A2A;
+    --border-subtle:#2C2C2E; --border-focus:#00E5FF;
+    --text-primary:#FFFFFF; --text-secondary:#98989D; --text-tertiary:#636366;
+    --accent-primary:#00E5FF; --accent-primary-hover:#80F0FF; --accent-secondary:#32D74B;
+    --accent-warning:#FF9500; --accent-error:#FF453A;
+    --status-bg-success:rgba(50,215,75,.10); --status-bg-info:rgba(0,229,255,.10);
+    --status-bg-warning:rgba(255,149,0,.10); --status-bg-error:rgba(255,69,58,.10);
+    --chart-sales:#00E5FF; --chart-forecast:#BF5AF2; --chart-inventory:#FF9500;
+    --shadow-card-hover:0 8px 30px rgba(0,0,0,.25);
+    color-scheme:dark;
+  }
+
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html { scroll-behavior:smooth; }
+  body {
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+    background:var(--bg-page); color:var(--text-primary);
+    line-height:1.65; font-size:15px;
+    transition:background-color .25s ease, color .25s ease;
+  }
+
+  .wrap { max-width:960px; margin:0 auto; padding:48px 24px 96px; }
+
+  /* 顶栏 */
+  header.top {
+    position:sticky; top:0; z-index:10;
+    background:color-mix(in srgb, var(--bg-surface) 88%, transparent);
+    backdrop-filter:saturate(180%) blur(12px);
+    border-bottom:1px solid var(--border-subtle);
+  }
+  header.top .inner {
+    max-width:960px; margin:0 auto; padding:12px 24px;
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+  }
+  .brand { display:flex; align-items:center; gap:10px; font-weight:600; font-size:14px; }
+  .brand .dot { width:26px;height:26px;border-radius:var(--radius-md);
+    background:var(--status-bg-info); display:grid; place-items:center; color:var(--accent-primary); }
+  .theme-btn {
+    font:inherit; font-size:12px; cursor:pointer;
+    border:1px solid var(--border-subtle); background:var(--bg-surface);
+    color:var(--text-secondary); border-radius:var(--radius-md);
+    padding:6px 12px; transition:color .2s, border-color .2s;
+  }
+  .theme-btn:hover { color:var(--text-primary); border-color:var(--border-focus); }
+
+  /* 文档标题 */
+  .hero h1 { font-size:30px; font-weight:700; letter-spacing:-.02em; margin-bottom:10px; }
+  .hero p.lead { color:var(--text-secondary); font-size:16px; max-width:70ch; }
+  .meta-row { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
+  .tag {
+    font-size:12px; padding:4px 10px; border-radius:999px;
+    background:var(--bg-surface-hover); color:var(--text-secondary);
+    border:1px solid var(--border-subtle);
+  }
+
+  section { margin-top:52px; }
+  h2 {
+    font-size:21px; font-weight:650; letter-spacing:-.01em;
+    display:flex; align-items:center; gap:10px; margin-bottom:6px;
+    scroll-margin-top:80px;
+  }
+  h2 .num {
+    font-size:13px; font-weight:600; color:var(--accent-primary);
+    background:var(--status-bg-info); border-radius:var(--radius-md);
+    width:26px; height:26px; display:grid; place-items:center; flex:none;
+  }
+  h3 { font-size:16px; font-weight:600; margin:26px 0 10px; }
+  .section-sub { color:var(--text-secondary); margin-bottom:18px; }
+  p { margin:10px 0; }
+  p, li { color:var(--text-primary); }
+  li { margin:5px 0; }
+  ul, ol { padding-left:22px; }
+  strong { font-weight:650; }
+  a { color:var(--accent-primary); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+
+  .card {
+    background:var(--bg-surface); border:1px solid var(--border-subtle);
+    border-radius:var(--radius-xl); padding:22px 24px; margin:16px 0;
+  }
+
+  code, .mono {
+    font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:.86em;
+  }
+  code.inl {
+    background:var(--bg-surface-hover); padding:1.5px 6px;
+    border-radius:var(--radius-md); color:var(--accent-primary);
+    border:1px solid var(--border-subtle);
+  }
+  pre {
+    background:var(--bg-surface-hover); border:1px solid var(--border-subtle);
+    border-radius:var(--radius-lg); padding:16px 18px; overflow-x:auto;
+    margin:14px 0; line-height:1.6;
+  }
+  pre code { color:var(--text-primary); font-size:13px; }
+
+  .formula {
+    background:var(--status-bg-info); border:1px solid color-mix(in srgb,var(--accent-primary) 25%,transparent);
+    border-radius:var(--radius-lg); padding:14px 18px; margin:14px 0;
+    text-align:center; font-family:'JetBrains Mono',ui-monospace,monospace; font-size:14px;
+    color:var(--text-primary);
+  }
+
+  table { width:100%; border-collapse:collapse; margin:16px 0; font-size:14px; }
+  th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--border-subtle); vertical-align:top; }
+  th { color:var(--text-secondary); font-weight:600; font-size:12.5px; text-transform:uppercase; letter-spacing:.03em; }
+  tbody tr:hover { background:var(--bg-surface-hover); }
+  td.mono, th.mono { font-family:'JetBrains Mono',ui-monospace,monospace; }
+
+  /* 分层架构图 */
+  .stack { display:flex; flex-direction:column; gap:0; margin:20px 0; }
+  .layer {
+    border:1px solid var(--border-subtle); border-radius:var(--radius-lg);
+    padding:16px 20px; background:var(--bg-surface); position:relative;
+  }
+  .layer + .layer { margin-top:34px; }
+  .layer::before {
+    content:"▼"; position:absolute; top:-28px; left:50%; transform:translateX(-50%);
+    color:var(--text-tertiary); font-size:13px;
+  }
+  .layer:first-child::before { content:none; }
+  .layer .lname { font-weight:650; font-size:15px; display:flex; align-items:center; gap:10px; }
+  .layer .ltag { font-size:11px; padding:2px 8px; border-radius:999px; font-weight:600; }
+  .layer .ldesc { color:var(--text-secondary); font-size:13.5px; margin-top:6px; }
+  .layer .tech { color:var(--text-tertiary); font-size:12px; margin-top:8px; font-family:'JetBrains Mono',monospace; }
+  .l-fe { border-left:3px solid var(--accent-primary); }
+  .l-api { border-left:3px solid var(--accent-secondary); }
+  .l-data { border-left:3px solid var(--accent-warning); }
+  .l-fc { border-left:3px solid var(--chart-forecast); }
+  .ltag.fe { background:var(--status-bg-info); color:var(--accent-primary); }
+  .ltag.api { background:var(--status-bg-success); color:var(--accent-secondary); }
+  .ltag.data { background:var(--status-bg-warning); color:var(--accent-warning); }
+  .ltag.fc { background:color-mix(in srgb,var(--chart-forecast) 12%,transparent); color:var(--chart-forecast); }
+
+  /* pipeline steps */
+  .steps { counter-reset:step; margin:18px 0; }
+  .step { display:flex; gap:14px; padding:12px 0; border-bottom:1px dashed var(--border-subtle); }
+  .step:last-child { border-bottom:none; }
+  .step .idx {
+    counter-increment:step; flex:none; width:26px; height:26px; border-radius:999px;
+    background:var(--status-bg-warning); color:var(--accent-warning);
+    display:grid; place-items:center; font-size:12px; font-weight:700;
+  }
+  .step .idx::before { content:counter(step); }
+  .step .sbody b { font-weight:600; }
+  .step .sbody .out { color:var(--text-tertiary); font-size:12px; font-family:'JetBrains Mono',monospace; }
+
+  .note {
+    border-left:3px solid var(--accent-warning);
+    background:var(--status-bg-warning); border-radius:0 var(--radius-md) var(--radius-md) 0;
+    padding:12px 16px; margin:16px 0; font-size:13.5px; color:var(--text-primary);
+  }
+  .note b { color:var(--accent-warning); }
+
+  .badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; }
+  .b-crit { background:var(--status-bg-error); color:var(--accent-error); }
+  .b-low  { background:var(--status-bg-warning); color:var(--accent-warning); }
+  .b-norm { background:var(--status-bg-info); color:var(--accent-primary); }
+  .b-suf  { background:var(--status-bg-success); color:var(--accent-secondary); }
+
+  hr.sep { border:none; border-top:1px solid var(--border-subtle); margin:0; }
+  footer { margin-top:64px; padding-top:24px; border-top:1px solid var(--border-subtle);
+    color:var(--text-tertiary); font-size:13px; }
+
+  @media (max-width:640px){
+    .wrap{ padding:32px 16px 72px; } .hero h1{ font-size:24px; }
+    header.top .inner{ padding:12px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="inner">
+    <div class="brand">
+      <span class="dot">◧</span>
+      门店销售与智能补货 · 技术架构说明
+    </div>
+    <button class="theme-btn" id="themeBtn" type="button">切换深/浅色</button>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="hero">
+    <h1>系统分层架构与核心计算逻辑</h1>
+    <p class="lead">
+      本文面向技术人员，说明系统的四层结构（前端层 / API 层 / 数据处理层 / 销量预测层）及其运行调用关系，
+      并解释数据处理、销量预测与补货量计算的基本逻辑。系统采用<strong>离线批处理</strong>模式：所有繁重计算在离线层完成并落表，
+      API 层只做只读查询，前端只负责展示。
+    </p>
+    <div class="meta-row">
+      <span class="tag">React + TypeScript</span>
+      <span class="tag">Python Flask</span>
+      <span class="tag">Pandas / NumPy</span>
+      <span class="tag">离线预计算表 (CSV)</span>
+      <span class="tag">预测目标：Units Sold</span>
+    </div>
+  </div>
+
+  <!-- ============ 1. 分层架构总览 ============ -->
+  <section id="overview">
+    <h2><span class="num">1</span>分层架构总览</h2>
+    <p class="section-sub">
+      系统由四层组成。核心设计原则：<strong>计算与查询分离</strong>——预测、K 估算、安全库存、补货量、库存状态、排名等全部在离线数据处理层预计算，
+      API 请求期间不做任何复杂计算，从而保证响应快速、结果可复现。
+    </p>
+
+    <div class="stack">
+      <div class="layer l-fe">
+        <div class="lname">前端层 <span class="ltag fe">Frontend</span></div>
+        <div class="ldesc">页面渲染、筛选状态与路由、图表展示、下单草稿。不实现任何业务公式，只消费后端结果。</div>
+        <div class="tech">React · TypeScript · Tailwind · shadcn/ui · Recharts</div>
+      </div>
+      <div class="layer l-api">
+        <div class="lname">API 层 <span class="ltag api">Backend</span></div>
+        <div class="ldesc">参数校验、查询预计算结果表、关联维度表、组装 <code class="inl">{ context, data }</code> 响应、返回空数据与错误状态。<strong>不执行预测 / K 估算 / 补货计算</strong>。</div>
+        <div class="tech">Flask · Blueprint · Repository（只读）</div>
+      </div>
+      <div class="layer l-data">
+        <div class="lname">数据处理层 <span class="ltag data">Offline Pipeline</span></div>
+        <div class="ldesc">离线批处理：清洗校验 → 构建维度/事实表 → 估算 K → 生成预测 → 误差统计 → 计算补货与库存状态 → 销售汇总/排名 → 落表。</div>
+        <div class="tech">offline_calculation/pipeline.py · Pandas · NumPy · YAML 配置</div>
+      </div>
+      <div class="layer l-fc">
+        <div class="lname">销量预测层 <span class="ltag fc">Forecast</span></div>
+        <div class="ldesc">被数据处理层调用的独立预测模块：集成模型（Ensemble）以 walk-forward 方式为每个 (门店, 商品) 生成未来 7 天点预测与预测区间。</div>
+        <div class="tech">forecast/batch.py · forecast/calculator.py（EnsembleForecastCalculator）</div>
+      </div>
+    </div>
+
+    <h3>运行调用关系</h3>
+    <p>系统存在两条时间上解耦的路径：</p>
+    <ul>
+      <li><strong>离线批处理路径（写）</strong>：<br />
+        <code class="inl">原始 CSV</code> → 数据处理层 <code class="inl">pipeline.run()</code> →（内部调用<span style="color:var(--chart-forecast)">销量预测层</span>生成预测）→ 计算补货 → 写入 <code class="inl">data/processed_data/*.csv</code> 预计算表。</li>
+      <li><strong>在线请求路径（读）</strong>：<br />
+        前端 <code class="inl">api.ts</code> → <code class="inl">HTTP/JSON</code> → API 层 Query → Repository 只读查询预计算表 → 返回 <code class="inl">{ context, data }</code> → 前端渲染。</li>
+    </ul>
+
+    <div class="card">
+      <div class="mono" style="font-size:12.5px; line-height:1.75; color:var(--text-secondary); white-space:pre; overflow-x:auto;">
+前端层 (React)
+   │  GET /api/overview | /rankings | /replenishment | /products/:id
+   ▼
+API 层 (Flask, 只读)
+   │  Query.execute() → Repository.get_*()
+   ▼
+预计算结果表 (data/processed_data/*.csv)
+   ▲
+   │  pipeline 落表（离线，非请求期）
+数据处理层 (offline_calculation)
+   │  build_forecast() 调用 ↓
+   ▼
+销量预测层 (forecast.batch → EnsembleForecastCalculator)</div>
+    </div>
+
+    <div class="note">
+      <b>实现现状提示：</b>仓库中 <code class="inl">api/app.py</code> 为早期单体版本（直接在请求中调用旧的 <code class="inl">ForecastService</code>）。
+      当前前端消费的是新版离线批处理契约（<code class="inl">{context,data}</code>、<code class="inl">lead_time_k</code>、<code class="inl">in_transit</code>、<code class="inl">safety_stock</code> 等），
+      对应 <code class="inl">api/queries/</code> + <code class="inl">api/infrastructure/</code> 的只读查询层。本文按新版架构描述。
+    </div>
+  </section>
+
+  <hr class="sep" style="margin-top:52px" />
+
+  <!-- ============ 2. 数据处理层 ============ -->
+  <section id="data">
+    <h2><span class="num">2</span>数据处理层的基本逻辑</h2>
+    <p class="section-sub">
+      数据处理层是一条离线流水线（<code class="inl">offline_calculation/steps/*</code>），以 <code class="inl">Date + Store ID + Product ID</code> 为最小粒度，
+      按 <code class="inl">(store_id, product_id)</code> 严格隔离，不混用不同门店/商品的数据。各步骤顺序执行并把结果写入预计算表。
+    </p>
+
+    <div class="steps">
+      <div class="step"><span class="idx"></span><div class="sbody"><b>加载与校验</b> <code class="inl">load_validate</code> —— 读取原始 CSV，校验主键唯一、必需字段存在、日期可排序、数值非负；生成数据质量报告。<div class="out">→ data_quality_report</div></div></div>
+      <div class="step"><span class="idx"></span><div class="sbody"><b>构建维度/事实表</b> <code class="inl">build_fact</code> —— 标准化字段与库存口径，生成日事实表。库存口径：<code class="inl">当前(售后)库存 = Inventory Level − Units Sold</code>（<code class="inl">Inventory Level</code> 为当天销售前库存）。<div class="out">→ dim_store, dim_product, fact_daily_inventory_sales</div></div></div>
+      <div class="step"><span class="idx"></span><div class="sbody"><b>估算提前期 K</b> <code class="inl">estimate_lead_time</code> —— 对每个 (门店,商品) 用 MSE 估计下单到入库天数（详见 §4）。<div class="out">→ fact_lead_time</div></div></div>
+      <div class="step"><span class="idx"></span><div class="sbody"><b>生成预测</b> <code class="inl">build_forecast</code> —— 调用<span style="color:var(--chart-forecast)">销量预测层</span>，walk-forward 生成未来 7 天点预测与预测区间（详见 §3）。<div class="out">→ fact_forecast</div></div></div>
+      <div class="step"><span class="idx"></span><div class="sbody"><b>预测误差统计</b> <code class="inl">build_error_stats</code> —— 对固定 horizon 的历史预测误差做滚动标准差 σ，供安全库存使用。<div class="out">→ fact_forecast_error_stats</div></div></div>
+      <div class="step"><span class="idx"></span><div class="sbody"><b>计算补货与库存状态</b> <code class="inl">build_replenishment</code> —— 整合在途库存、K 天预测、安全库存，算出建议补货量与库存状态（详见 §4）。<div class="out">→ fact_daily_replenishment</div></div></div>
+      <div class="step"><span class="idx"></span><div class="sbody"><b>销售汇总与排名</b> <code class="inl">build_sales_metrics</code> / <code class="inl">build_product_summary</code> —— 计算日均销量、时间范围累计销量与畅销/滞销排名。<div class="out">→ fact_daily_sales_metrics, fact_product_sales_summary</div></div></div>
+    </div>
+
+    <h3>关键口径定义</h3>
+    <table>
+      <thead><tr><th>指标</th><th>定义</th></tr></thead>
+      <tbody>
+        <tr><td>当前(售后)库存</td><td class="mono">opening_inventory − units_sold</td></tr>
+        <tr><td>在途库存</td><td>最近 <code class="inl">K−1</code> 个自然日的 <code class="inl">Units Ordered</code> 之和（不含当日）；<code class="inl">K≤1</code> 时为 0</td></tr>
+        <tr><td>日均销量</td><td class="mono">最近 90 天累计 Units Sold / 90（缺失日按 0 补齐）</td></tr>
+        <tr><td>覆盖天数</td><td class="mono">(当前库存 + 在途库存) / 日均销量</td></tr>
+      </tbody>
+    </table>
+
+    <div class="note">
+      预测目标统一为 <b>Units Sold（实际销量）</b>；<code class="inl">Demand</code> 字段不作为对外展示指标。历史与预测在前端使用不同颜色/图例区分，避免混淆。
+    </div>
+  </section>
+
+  <hr class="sep" style="margin-top:52px" />
+
+  <!-- ============ 3. 销量预测层 ============ -->
+  <section id="forecast">
+    <h2><span class="num">3</span>销量预测层的基本逻辑</h2>
+    <p class="section-sub">
+      预测层是一个<strong>无需训练、即插即用</strong>的集成模型（<code class="inl">EnsembleForecastCalculator</code>），
+      对异常值鲁棒、可解释性强。数据处理层以 walk-forward 方式逐 (门店, 商品) 调用它，产出未来 7 天每日点预测及预测区间。
+    </p>
+
+    <h3>3.1 集成预测（单日）</h3>
+    <p>预测第 <code class="inl">i</code> 天（明天为 <code class="inl">i=0</code>）销量，由四个可解释分量加权组合：</p>
+    <div class="formula">
+      ŷ = (0.3·近期均值 + 0.4·星期均值) × 趋势因子 × 0.7 &nbsp;+&nbsp; 0.3·近期均值 × 季节因子
+    </div>
+    <table>
+      <thead><tr><th>分量</th><th>含义</th></tr></thead>
+      <tbody>
+        <tr><td>近期均值</td><td>最近 14 天销量均值（捕捉当前水平）</td></tr>
+        <tr><td>星期均值</td><td>历史同星期几最近 8 条均值（捕捉周内周期）；样本不足 4 条退化为近期均值</td></tr>
+        <tr><td>趋势因子</td><td class="mono">clip(最近7天均值 / 最近30天均值, 0.7, 1.3)</td></tr>
+        <tr><td>季节因子</td><td class="mono">clip(目标月份历史均值 / 近期均值, 0.7, 1.3)</td></tr>
+      </tbody>
+    </table>
+    <p>结果做非负截断 <code class="inl">max(0, ŷ)</code>。裁剪区间 <code class="inl">[0.7, 1.3]</code> 防止趋势/季节过度反应。历史不足 7 天时触发降级预测（保守常数值）。</p>
+
+    <h3>3.2 Walk-forward 与预测区间</h3>
+    <p>对每个预测起点 <code class="inl">forecast_origin_date</code> 逐日滚动预测未来 7 天，并回填实际值与预测误差以供评估。预测区间由滚动误差标准差得到：</p>
+    <div class="formula">
+      [lower, upper] = forecast ± 1.96 × σ_error &nbsp;&nbsp;(lower 截断为 ≥ 0)
+    </div>
+    <p><code class="inl">σ_error</code> 为固定 horizon=3 的有效预测误差在 30 天窗口内的样本标准差（<code class="inl">ddof=1</code>）；有效误差不足 2 个时取默认 <code class="inl">σ = 1.0</code>。</p>
+
+    <div class="note">
+      <b>重要约束：</b>补货计算<b>只使用点预测</b> <code class="inl">forecast_units_sold</code>，不使用预测区间上界。若某商品预测状态非 <code class="inl">ready</code>，该商品单独标记为"无法生成建议"，不影响其他商品。
+    </div>
+  </section>
+
+  <hr class="sep" style="margin-top:52px" />
+
+  <!-- ============ 4. 补货量计算 ============ -->
+  <section id="replenishment">
+    <h2><span class="num">4</span>订单补货量的计算逻辑</h2>
+    <p class="section-sub">
+      补货计算在 <code class="inl">build_replenishment</code> 中完成，整合提前期 K、在途库存、K 天预测销量与安全库存，得到唯一的建议补货量。
+    </p>
+
+    <h3>4.1 提前期 K 估算</h3>
+    <p>K 是下单到入库的提前期（<code class="inl">(门店,商品)</code> 级别，候选范围 <code class="inl">0～7</code> 天）。用库存平衡方程对每个候选 K 计算 MSE：</p>
+    <pre><code>predicted_inventory[t+1] = Inventory[t] − UnitsSold[t] + UnitsOrdered[t−K]
+MSE(K) = mean( (Inventory[t+1] − predicted_inventory[t+1])² )</code></pre>
+    <ul>
+      <li>选择 <strong>MSE 最小</strong>的 K；MSE 相同时选<strong>较大</strong>的 K。</li>
+      <li>无法估算时回退 <code class="inl">K = 2</code>；估得 <code class="inl">K = 0</code> 时按 <code class="inl">K = 1</code> 执行（记为 effective K）。</li>
+      <li>返回 K 来源：<code class="inl">estimated</code> 或 <code class="inl">default</code>。</li>
+    </ul>
+
+    <h3>4.2 安全库存</h3>
+    <div class="formula">safety_stock = Z × σ × √K &nbsp;&nbsp;(Z = 2.33，约 99% 服务水平)</div>
+    <p><code class="inl">σ</code> 为该 (门店,商品) 的预测误差滚动标准差（来自 §3.2 的误差统计）；<code class="inl">K</code> 为有效提前期。</p>
+
+    <h3>4.3 建议补货量</h3>
+    <p>补货目标是覆盖未来 K 天预测销量并留出安全库存，扣除手头与在途：</p>
+    <pre><code>forecast_during_lead_time = Σ 未来 7 天预测的前 K 天点预测
+raw = forecast_during_lead_time + safety_stock − current_inventory − in_transit_inventory
+suggested_replenishment = ceil( max(0, raw) )</code></pre>
+    <p>建议补货量<strong>始终为非负整数</strong>（向上取整）。</p>
+
+    <h3>4.4 库存状态判定</h3>
+    <p>基于含在途库存的覆盖天数分级（<code class="inl">coverage_days = (current + in_transit) / 日均销量</code>）：</p>
+    <table>
+      <thead><tr><th>覆盖天数</th><th>状态</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">&lt; 2 天</td><td><span class="badge b-crit">紧缺 critical</span></td></tr>
+        <tr><td class="mono">≥ 2 且 &lt; 4 天</td><td><span class="badge b-low">偏低 low</span></td></tr>
+        <tr><td class="mono">≥ 4 且 ≤ 7 天</td><td><span class="badge b-norm">正常 normal</span></td></tr>
+        <tr><td class="mono">&gt; 7 天</td><td><span class="badge b-suf">充足 sufficient</span></td></tr>
+      </tbody>
+    </table>
+    <p>日均销量为 0 时覆盖天数记为 <code class="inl">N/A</code>，状态为 <code class="inl">undetermined</code>（避免显示无穷大）。</p>
+
+    <div class="note">
+      <b>销售表现 ≠ 库存风险：</b><code class="inl">滞销</code> 是销售标签，<code class="inl">紧缺</code> 是库存标签。一个商品可能"滞销但库存充足"，也可能"畅销且库存紧缺"，两者用独立字段表示，不合并成单一结论。
+    </div>
+
+    <h3>4.5 一个示例</h3>
+    <div class="card">
+      <p style="margin-top:0">某商品：K=3，未来 3 天预测合计 168，安全库存 40，当前库存 120，在途 30：</p>
+      <div class="formula" style="margin-bottom:0">raw = 168 + 40 − 120 − 30 = 58 &nbsp;→&nbsp; 建议补货量 = 58 件</div>
+    </div>
+  </section>
+
+  <footer>
+    <p>参考文档：<code class="mono">01-Architecture-new.md</code> · <code class="mono">03-Offline-data-process.md</code> · <code class="mono">05-sales_forecast.md</code> · <code class="mono">formular_and_config.md</code> · <code class="mono">07-API.md</code></p>
+    <p>核心源码：<code class="mono">offline_calculation/steps/build_forecast.py</code> · <code class="mono">build_replenishment.py</code> · <code class="mono">forecast/calculator.py</code> · <code class="mono">api/queries/*</code></p>
+    <p style="margin-top:10px">预测目标统一为 Units Sold · 数据粒度 Date + Store ID + Product ID · 计算在离线层，API 只读查询。</p>
+  </footer>
+
+</div>
+
+<script>
+  // 主题：跟随系统 + 手动切换，持久化到 localStorage('sephora-theme')，与前端一致
+  (function () {
+    var root = document.documentElement;
+    var KEY = 'sephora-theme';
+    function apply(mode) {
+      var dark = mode === 'dark' ||
+        (mode !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+      root.classList.toggle('theme-dark', dark);
+      root.classList.toggle('theme-light', !dark);
+    }
+    var saved = null;
+    try { saved = localStorage.getItem(KEY); } catch (e) {}
+    apply(saved || 'system');
+    document.getElementById('themeBtn').addEventListener('click', function () {
+      var nowDark = root.classList.contains('theme-dark');
+      var next = nowDark ? 'light' : 'dark';
+      try { localStorage.setItem(KEY, next); } catch (e) {}
+      apply(next);
+    });
+  })();
+</script>
+</body>
+</html>
