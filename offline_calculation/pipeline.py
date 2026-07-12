@@ -41,7 +41,8 @@ def run_pipeline(
         raw_path: 原始 sales_data.csv 路径
         output_dir: 输出目录
         config: 业务配置
-        as_of_date: 计算基准日期，默认 max(date) - 7 days
+        as_of_date: 计算基准日期，默认 max(date) - offline.as_of_date_offset_days
+                    （当前配置 offset=0，即 max(date)，保证最新基准日仍有库存值）
     """
     calculated_at = datetime.now()
     if config is None:
