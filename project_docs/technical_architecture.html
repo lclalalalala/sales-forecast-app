@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>技术架构文档 - 零售门店库存与需求预测系统</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+  :root {
+    --bg-page: #FAFAFA;
+    --bg-surface: #FFFFFF;
+    --bg-surface-hover: #F5F5F5;
+    --border-subtle: #E8E8EC;
+    --text-primary: #0A0A0A;
+    --text-secondary: #6B6B6B;
+    --text-tertiary: #9C9C9C;
+    --accent-primary: #6366F1;
+    --accent-secondary: #20970B;
+    --accent-warning: #F59E0B;
+    --accent-error: #EF4444;
+    --accent-purple: #9333EA;
+    --status-bg-success: rgba(32, 151, 11, 0.10);
+    --status-bg-info: rgba(99, 102, 241, 0.10);
+    --status-bg-warning: rgba(245, 158, 11, 0.10);
+    --radius-lg: 8px;
+    --radius-xl: 12px;
+  }
+
+  .theme-dark {
+    --bg-page: #121212;
+    --bg-surface: #1E1E1E;
+    --bg-surface-hover: #2A2A2A;
+    --border-subtle: #2C2C2E;
+    --text-primary: #FFFFFF;
+    --text-secondary: #98989D;
+    --text-tertiary: #636366;
+    --accent-primary: #00E5FF;
+    --accent-secondary: #32D74B;
+    --accent-warning: #FF9500;
+    --accent-error: #FF453A;
+    --accent-purple: #BF5AF2;
+    --status-bg-success: rgba(50, 215, 75, 0.10);
+    --status-bg-info: rgba(0, 229, 255, 0.10);
+    --status-bg-warning: rgba(255, 149, 0, 0.10);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    line-height: 1.7;
+    transition: background-color 0.25s, color 0.25s;
+  }
+
+  .container { max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  header h1 { font-size: 1.5rem; font-weight: 700; }
+  .theme-toggle {
+    padding: 0.4rem 0.8rem;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+  }
+  .theme-toggle:hover { color: var(--text-primary); border-color: var(--accent-primary); }
+
+  h2 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin: 2.5rem 0 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--accent-primary);
+  }
+
+  h3 { font-size: 0.95rem; font-weight: 600; margin: 1.5rem 0 0.5rem; color: var(--text-primary); }
+
+  p { margin-bottom: 0.8rem; color: var(--text-secondary); font-size: 0.9rem; }
+
+  .card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xl);
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  .arch-diagram {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 1.5rem 0;
+  }
+  .arch-layer {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xl);
+    padding: 1rem 1.25rem;
+    position: relative;
+  }
+  .arch-layer + .arch-arrow {
+    display: flex;
+    justify-content: center;
+    padding: 0.4rem 0;
+    color: var(--text-tertiary);
+    font-size: 1.2rem;
+  }
+  .arch-layer .layer-tag {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.15rem 0.5rem;
+    border-radius: 9999px;
+    margin-bottom: 0.5rem;
+  }
+  .tag-frontend { background: var(--status-bg-info); color: var(--accent-primary); }
+  .tag-api { background: var(--status-bg-success); color: var(--accent-secondary); }
+  .tag-data { background: var(--status-bg-warning); color: var(--accent-warning); }
+  .tag-forecast { background: rgba(147, 51, 234, 0.12); color: var(--accent-purple); }
+
+  .arch-layer .layer-title { font-weight: 600; font-size: 0.9rem; margin-bottom: 0.25rem; }
+  .arch-layer .layer-desc { font-size: 0.82rem; color: var(--text-secondary); margin: 0; }
+
+  .flow-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0.75rem 0;
+    font-size: 0.85rem;
+  }
+  .flow-box {
+    background: var(--bg-surface-hover);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 0.35rem 0.75rem;
+    font-weight: 500;
+    white-space: nowrap;
+    font-size: 0.82rem;
+  }
+  .flow-arrow { color: var(--text-tertiary); font-size: 0.9rem; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-size: 0.85rem;
+  }
+  th, td {
+    padding: 0.6rem 0.8rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  th {
+    font-weight: 600;
+    color: var(--text-tertiary);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  td { color: var(--text-secondary); }
+  tr:hover td { background: var(--bg-surface-hover); }
+
+  code {
+    background: var(--bg-surface-hover);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.82rem;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: var(--accent-primary);
+  }
+
+  .formula {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 0.8rem 1rem;
+    margin: 0.8rem 0;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.82rem;
+    color: var(--accent-primary);
+    overflow-x: auto;
+  }
+
+  ul, ol { margin: 0.5rem 0 0.8rem 1.5rem; font-size: 0.88rem; color: var(--text-secondary); }
+  li { margin-bottom: 0.3rem; }
+
+  .badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.1rem 0.45rem;
+    border-radius: 9999px;
+  }
+  .badge-ready { background: var(--status-bg-success); color: var(--accent-secondary); }
+  .badge-warn { background: var(--status-bg-warning); color: var(--accent-warning); }
+  .badge-critical { background: rgba(239, 68, 68, 0.10); color: var(--accent-error); }
+
+  footer {
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-subtle);
+    font-size: 0.78rem;
+    color: var(--text-tertiary);
+  }
+
+  @media (max-width: 640px) {
+    .container { padding: 1rem; }
+    .flow-row { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<header>
+  <h1>技术架构文档</h1>
+  <button class="theme-toggle" onclick="document.documentElement.classList.toggle('theme-dark');this.textContent=document.documentElement.classList.contains('theme-dark')?'浅色模式':'深色模式'">深色模式</button>
+</header>
+
+<!-- ─── 1. 系统架构 ─── -->
+<h2>1. 系统架构</h2>
+<p>系统采用四层架构，离线计算与在线服务分离。</p>
+
+<div class="arch-diagram">
+  <div class="arch-layer">
+    <span class="layer-tag tag-frontend">L1</span>
+    <div class="layer-title">前端展示层</div>
+    <p class="layer-desc">React + Vite + Recharts，通过 HTTP 调用 API 层获取数据</p>
+  </div>
+  <div class="arch-arrow">↕ HTTP GET</div>
+  <div class="arch-layer">
+    <span class="layer-tag tag-api">L2</span>
+    <div class="layer-title">API 服务层</div>
+    <p class="layer-desc">Flask REST API，只读查询，不做实时计算</p>
+  </div>
+  <div class="arch-arrow">↕ 读取 CSV</div>
+  <div class="arch-layer">
+    <span class="layer-tag tag-data">L3</span>
+    <div class="layer-title">数据处理层</div>
+    <p class="layer-desc">离线批处理：构建事实表、维度表、销量汇总、补货推荐</p>
+  </div>
+  <div class="arch-arrow">↕ 调用</div>
+  <div class="arch-layer">
+    <span class="layer-tag tag-forecast">L4</span>
+    <div class="layer-title">销量预测层</div>
+    <p class="layer-desc">Walk-forward 组合预测模型，输出未来 7 天逐日预测</p>
+  </div>
+</div>
+
+<div class="card">
+  <h3>运行调用关系</h3>
+  <div class="flow-row">
+    <span class="flow-box">前端</span>
+    <span class="flow-arrow">→ GET /api/overview</span>
+    <span class="flow-box">Flask API</span>
+    <span class="flow-arrow">→ 读取</span>
+    <span class="flow-box">CSV 文件</span>
+  </div>
+  <div class="flow-row">
+    <span class="flow-box">离线 Pipeline</span>
+    <span class="flow-arrow">→ 调用</span>
+    <span class="flow-box">预测模块</span>
+    <span class="flow-arrow">→ 输出</span>
+    <span class="flow-box">CSV 文件</span>
+  </div>
+  <p style="margin-top:0.8rem;">在线 API 不做任何计算，只读取离线预计算的结果。离线 Pipeline 每日运行一次，更新所有 CSV。</p>
+</div>
+
+<!-- ─── 2. 数据处理层 ─── -->
+<h2>2. 数据处理层</h2>
+<p>离线 Pipeline 按 8 步流程处理原始销售数据，输出预计算表供 API 读取。</p>
+
+<h3>2.1 输入</h3>
+<p>原始文件 <code>sales_data.csv</code>，每行记录一个门店某商品某天的销售快照，包含：日期、门店、商品、类别、开始库存、销量、订单量、结束库存等字段。</p>
+
+<h3>2.2 输出表</h3>
+<table>
+  <tr><th>文件</th><th>内容</th></tr>
+  <tr><td><code>fact_daily_inventory_sales.csv</code></td><td>标准化的事实表，每天每门店每商品一行</td></tr>
+  <tr><td><code>fact_lead_time.csv</code></td><td>每个商品在每个门店的提前期 K 估计值</td></tr>
+  <tr><td><code>fact_forecast.csv</code></td><td>未来 7 天逐日销量预测</td></tr>
+  <tr><td><code>fact_daily_replenishment.csv</code></td><td>每日补货推荐（库存 + 预测 + 安全库存 + 建议量）</td></tr>
+  <tr><td><code>fact_daily_sales_metrics.csv</code></td><td>门店 × 类别维度的日销量汇总</td></tr>
+</table>
+
+<h3>2.3 提前期 K 估计</h3>
+<p>对每个 (门店, 商品) 组合，用最近 90 天的数据估计 K：</p>
+<ul>
+  <li>遍历 K = 0~7，用公式 <code>预测明日库存 = 今日库存 - 今日销量 + 第K天前的订单量</code> 还原历史</li>
+  <li>选择均方误差 (MSE) 最小的 K（误差相同时取较大值）</li>
+  <li>无法估计时默认 K = 2</li>
+</ul>
+
+<h3>2.4 库存递推关系</h3>
+<div class="formula">当日开始库存 = 前日结束库存 + units_ordered(第 K 天前)</div>
+<div class="formula">当日结束库存 = 当日开始库存 - 当日销量</div>
+<p>K=1 时订单隔天到货，在途库存始终为 0；K≥2 时在途库存 = 过去 K-1 天内已下单未到货的订单之和。</p>
+
+<!-- ─── 3. 销量预测层 ─── -->
+<h2>3. 销量预测层</h2>
+
+<h3>3.1 预测模型</h3>
+<p>采用 <strong>Walk-Forward 组合预测</strong>，对每个 (门店, 商品) 组合：</p>
+<ul>
+  <li>基于历史观测数据，训练多种时间序列模型</li>
+  <li>按日期滚动（walk-forward），每天生成未来 7 天的逐日预测</li>
+  <li>组合多个模型的预测结果，取加权平均</li>
+</ul>
+
+<h3>3.2 预测区间</h3>
+<p>基于预测误差计算 95% 置信区间：</p>
+<div class="formula">下界 = 预测值 - 1.96 × σ<br>上界 = 预测值 + 1.96 × σ</div>
+<p>σ 为最近 30 天内、固定 horizon=3 的有效预测误差的标准差。</p>
+
+<!-- ─── 4. 补货推荐计算 ─── -->
+<h2>4. 补货推荐计算</h2>
+
+<h3>4.1 安全库存</h3>
+<div class="formula">安全库存 = 2.33 × σ × √K</div>
+<table>
+  <tr><th>参数</th><th>含义</th><th>来源</th></tr>
+  <tr><td><code>2.33</code></td><td>服务水平系数（对应 99% 不缺货概率）</td><td>配置</td></tr>
+  <tr><td><code>σ</code></td><td>预测误差标准差</td><td>最近 30 天误差统计</td></tr>
+  <tr><td><code>K</code></td><td>提前期天数</td><td>Lead Time 估计</td></tr>
+</table>
+
+<h3>4.2 覆盖天数与库存状态</h3>
+<div class="formula">覆盖天数 = (当前库存 + 在途库存) ÷ 日均销量</div>
+<table>
+  <tr><th>状态</th><th>条件</th></tr>
+  <tr><td><span class="badge badge-critical">紧缺</span></td><td>覆盖 &lt; 2 天</td></tr>
+  <tr><td><span class="badge badge-warn">偏低</span></td><td>覆盖 &lt; 4 天</td></tr>
+  <tr><td><span class="badge" style="background:var(--status-bg-info);color:var(--accent-primary)">正常</span></td><td>覆盖 ≤ 7 天</td></tr>
+  <tr><td><span class="badge badge-ready">充足</span></td><td>覆盖 &gt; 7 天</td></tr>
+</table>
+
+<h3>4.3 建议补货量</h3>
+<div class="formula">建议补货量 = max(0, 未来K天预测需求 - 当前库存 - 在途库存 + 安全库存)</div>
+<p>结果向上取整。为 0 时表示现有库存充足，无需补货。</p>
+
+<!-- ─── 5. API 接口 ─── -->
+<h2>5. API 接口</h2>
+<table>
+  <tr><th>端点</th><th>用途</th><th>关键参数</th></tr>
+  <tr><td><code>GET /api/overview</code></td><td>数据概览（KPI + 趋势 + 排名）</td><td>store_id, range, category</td></tr>
+  <tr><td><code>GET /api/replenishment</code></td><td>补货建议列表</td><td>store_id, category</td></tr>
+  <tr><td><code>GET /api/products/:id</code></td><td>商品详情（历史 + 预测 + 补货）</td><td>store_id, range</td></tr>
+  <tr><td><code>GET /api/rankings</code></td><td>商品销量排名</td><td>store_id, range, category</td></tr>
+  <tr><td><code>GET /api/stores</code></td><td>门店列表</td><td>—</td></tr>
+  <tr><td><code>GET /api/categories</code></td><td>类别列表</td><td>—</td></tr>
+</table>
+<p>所有接口返回统一格式 <code>{context, data}</code>，错误时返回 <code>{error: {code, message}}</code>。</p>
+
+<footer>
+  零售门店库存与需求预测系统 · 技术架构文档
+</footer>
+
+</div>
+</body>
+</html>

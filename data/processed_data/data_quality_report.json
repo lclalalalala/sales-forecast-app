@@ -1,0 +1,14 @@
+{
+  "data_version": "v1",
+  "row_count": 76000,
+  "store_count": 5,
+  "product_count": 20,
+  "date_start": "2022-01-01 00:00:00",
+  "date_end": "2024-01-30 00:00:00",
+  "duplicate_count": 0,
+  "null_count": 0,
+  "negative_value_count": 0,
+  "inventory_balance_error_count": 28831,
+  "status": "pass",
+  "calculated_at": "2026-07-13T02:55:03.368734"
+}

@@ -1,0 +1,35 @@
+default:
+  store_id: S001
+  time_range_days: 90
+
+ranking:
+  metric: units_sold
+  top_n: 5
+  bottom_n: 5
+
+lead_time:
+  estimation_window_days: 90
+  min_days: 0
+  max_days: 7
+  fallback_days: 2
+
+safety_stock:
+  service_level_z: 2.33
+  error_window_days: 90
+  insufficient_error_std: 1
+
+forecast:
+  error_horizon: 3
+  error_window_days: 30
+  forecast_window_days: 33
+
+offline:
+  output_dir: data/processed_data
+  as_of_date_offset_days: 0
+
+inventory_status:
+  basis: total_inventory
+  method: coverage_days
+  critical_less_than: 2
+  low_less_than: 4
+  normal_less_than_or_equal: 7

@@ -1,307 +1,452 @@
 /**
  * 补货建议页 - ReplenishmentPage
- * 基于历史数据预测的 Top 5 畅销品补货建议
+ * =============================
+ * 展示基于提前期 K、在途库存与安全库存的补货建议，支持排序、重点商品筛选、补货原因抽屉。
  */
 
-import { useState, useEffect, memo } from 'react';
-import { BarChart, Bar, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { Package, AlertTriangle, CheckCircle, ArrowRight, RefreshCw, Calendar } from 'lucide-react';
+import { useEffect, useMemo, useState, useRef, memo } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  Package, AlertTriangle, TrendingUp, ShieldAlert,
+  ShoppingCart, Calculator, ChevronRight, ClipboardCheck,
+} from 'lucide-react';
 import { api } from '@/services/api';
-import StoreSelector from '@/components/StoreSelector';
-import type { Store, ReplenishmentData, ReplenishmentSuggestion } from '@/types';
+import { isAbortError, getErrorMessage } from '@/lib/errors';
+import { REPLENISHMENT_DISPLAY_LIMIT } from '@/lib/constants';
+import FilterBar from '@/components/FilterBar';
+import InventoryStatusBadge from '@/components/InventoryStatusBadge';
+import DataState from '@/components/DataState';
+import KpiCard from '@/components/KpiCard';
+import Sparkline from '@/components/charts/Sparkline';
+import DataTable, { type DataTableColumn } from '@/components/ui/DataTable';
+import ReasonDrawer from '@/components/ReasonDrawer';
+import OrderForm from '@/components/OrderForm';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { useAnalysis } from '@/state/analysisContext';
+import type { Store, ReplenishmentSuggestion, AnalysisContext } from '@/types';
 
-const cardStyle = { backgroundColor: 'var(--card-surface)', border: '1px solid var(--border-color)', borderRadius: '12px' } as const;
+const fmt = (n?: number | null) => (n != null && Number.isFinite(n) ? n.toLocaleString('zh-CN') : '-');
+const f1 = (n?: number | null) => (n != null && Number.isFinite(n) && !Number.isNaN(n) ? n.toFixed(1) : '-');
 
-const fmt = (n?: number | null) => (n != null ? n.toLocaleString('zh-CN') : '0');
-const fmtInt = (n?: number | null) => (n != null ? Math.round(n).toLocaleString('zh-CN') : '0');
+const QUICK_FILTERS = [
+  { key: 'all', label: '全部商品' },
+  { key: 'pending', label: '待补货' },
+] as const;
 
-const invStyle = (item: ReplenishmentSuggestion) => {
-  const ratio = item.current_inventory / (item.total_predicted_demand || 1);
-  if (ratio > 1.2) return { label: '充足', bg: 'var(--status-sufficient-bg)', c: 'var(--accent-secondary)' };
-  if (ratio > 0.8) return { label: '正常', bg: 'var(--status-normal-bg)', c: 'var(--accent-primary)' };
-  if (ratio > 0.5) return { label: '偏低', bg: 'var(--status-low-bg)', c: 'var(--accent-warning)' };
-  return { label: '紧缺', bg: 'var(--status-critical-bg)', c: 'var(--accent-alert)' };
-};
+type QuickFilter = (typeof QUICK_FILTERS)[number]['key'];
 
-// ─── 子组件 ──────────────────────────────────────────────
-
-interface MiniChartProps {
-  predictions: number[];
-  pid: string;
+interface TitleBlockProps {
+  storeName: string;
+  context: AnalysisContext;
 }
 
-const MiniChart = memo(function MiniChart({ predictions, pid }: MiniChartProps) {
-  const data = predictions.map((v, i) => ({ day: `${i + 1}`, value: v }));
+const TitleBlock = memo(function TitleBlock({ storeName, context }: TitleBlockProps) {
   return (
-    <div className="h-14 w-28">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} barCategoryGap={2}>
-          <Bar dataKey="value" radius={[2, 2, 0, 0]}>
-            {predictions.map((_, i) => (
-              <Cell key={`${pid}-${i}`} fill="var(--accent-primary)" fillOpacity={0.4 + i * 0.08} />
-            ))}
-          </Bar>
-          <Tooltip
-            contentStyle={{
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: '6px',
-              fontSize: '11px',
-            }}
-            itemStyle={{ color: 'var(--text-primary)' }}
-            labelStyle={{ color: 'var(--text-primary)' }}
-            formatter={(v: number) => [`${v}`, '预测']}
-            labelFormatter={() => ''}
-          />
-        </BarChart>
-      </ResponsiveContainer>
+    <div className="mb-6">
+      <div className="flex items-baseline gap-3">
+        <h2 className="text-2xl font-semibold flex items-center gap-2 text-[var(--text-primary)]">
+          <Package className="w-6 h-6 text-[var(--accent-primary)]" />
+          补货建议
+        </h2>
+        <span className="text-sm text-[var(--text-secondary)]">
+          {storeName && storeName !== context.store_id ? `${context.store_id} · ${storeName}` : context.store_id}
+        </span>
+        <span className="text-xs text-[var(--text-tertiary)]">
+          数据截至：{context.as_of_date}
+        </span>
+      </div>
     </div>
   );
 });
 
 interface SummaryCardsProps {
-  data: ReplenishmentData;
+  suggestions: ReplenishmentSuggestion[];
 }
 
-const SummaryCards = memo(function SummaryCards({ data }: SummaryCardsProps) {
-  const needCount = data.top_5_products.filter((p) => p.suggested_replenishment > 0).length;
-  const total = data.top_5_products.reduce((s, p) => s + p.suggested_replenishment, 0);
+const SummaryCards = memo(function SummaryCards({ suggestions }: SummaryCardsProps) {
+  const totalReplenish = suggestions.reduce(
+    (sum, s) => sum + (s.suggested_replenishment || 0),
+    0,
+  );
+  const riskCount = suggestions.filter(
+    (s) => s.inventory_status === 'critical' || s.inventory_status === 'low',
+  ).length;
+  const focusCount = suggestions.filter(
+    (s) => s.suggested_replenishment > 0 || s.inventory_status === 'critical' || s.inventory_status === 'low',
+  ).length;
 
-  const items = [
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <KpiCard
+        icon={Package}
+        label="建议补货商品数"
+        value={fmt(suggestions.length)}
+      />
+      <KpiCard
+        icon={TrendingUp}
+        label="建议补货总量"
+        value={fmt(totalReplenish)}
+      />
+      <KpiCard
+        icon={ShieldAlert}
+        label="高缺货风险商品"
+        value={fmt(riskCount)}
+      />
+      <KpiCard
+        icon={AlertTriangle}
+        label="重点商品数"
+        value={fmt(focusCount)}
+        sub="建议补货量 > 0 或库存风险"
+      />
+    </div>
+  );
+});
+
+interface SuggestionTableProps {
+  items: ReplenishmentSuggestion[];
+  onProductClick: (productId: string) => void;
+  onOrderClick: (productId: string, suggestedQuantity: number) => void;
+}
+
+const SuggestionTable = memo(function SuggestionTable({
+  items,
+  onProductClick,
+  onOrderClick,
+}: SuggestionTableProps) {
+
+  const columns: DataTableColumn<ReplenishmentSuggestion>[] = [
     {
-      title: '预测日期',
-      value: data.forecast_date,
-      icon: Calendar,
-      color: 'var(--accent-primary)',
-      bg: 'color-mix(in srgb, var(--accent-primary) 5%, transparent)',
-      border: '1px solid color-mix(in srgb, var(--accent-primary) 15%, transparent)',
+      key: 'product_id',
+      header: '商品ID',
+      sortable: true,
+      render: (s) => (
+        <Link
+          to={`/products/${s.product_id}`}
+          data-product-id={s.product_id}
+          onClick={() => onProductClick(s.product_id)}
+          className="font-medium text-[var(--accent-primary)] hover:underline"
+        >
+          {s.product_id}
+        </Link>
+      ),
     },
     {
-      title: '需补货商品',
-      value: `${needCount} / 5`,
-      icon: Package,
-      color: 'var(--accent-warning)',
-      bg: 'color-mix(in srgb, var(--accent-warning) 5%, transparent)',
-      border: '1px solid color-mix(in srgb, var(--accent-warning) 15%, transparent)',
+      key: 'category',
+      header: '商品类别',
+      sortable: true,
+      render: (s) => (
+        <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs bg-[var(--bg-surface-hover)] text-[var(--accent-primary)]">
+          {s.category}
+        </span>
+      ),
     },
     {
-      title: '建议总补货量',
-      value: fmtInt(total),
-      icon: ArrowRight,
-      color: 'var(--accent-purple)',
-      bg: 'color-mix(in srgb, var(--accent-purple) 5%, transparent)',
-      border: '1px solid color-mix(in srgb, var(--accent-purple) 15%, transparent)',
+      key: 'current_inventory',
+      header: '当前库存',
+      align: 'right',
+      sortable: true,
+      render: (s) => <span className="text-[var(--text-primary)]">{fmt(s.current_inventory)}</span>,
+    },
+    {
+      key: 'in_transit_inventory',
+      header: '在途库存',
+      align: 'right',
+      sortable: true,
+      render: (s) => <span className="text-[var(--text-secondary)]">{fmt(s.in_transit_inventory)}</span>,
+    },
+    {
+      key: 'lead_time_k',
+      header: 'K',
+      align: 'right',
+      sortable: true,
+      width: '60px',
+      render: (s) => (
+        <span className="font-medium text-[var(--text-primary)]">
+          {s.lead_time_k}
+          <span className="ml-1 text-[10px] text-[var(--text-tertiary)]">
+            {s.lead_time_k_source === 'estimated' ? '估' : '默'}
+          </span>
+        </span>
+      ),
+    },
+    {
+      key: 'forecast_trend',
+      header: '预测趋势',
+      render: (s) => (
+        <Sparkline
+          data={(s.forecast_7d ?? []).map((p) => p.units_sold)}
+          labels={(s.forecast_7d ?? []).map((p) => p.date.slice(5))}
+          height={36}
+        />
+      ),
+    },
+    {
+      key: 'forecast_k_total',
+      header: 'K天预测合计',
+      align: 'right',
+      sortable: true,
+      render: (s) => <span className="text-[var(--text-secondary)]">{f1(s.forecast_k_total)}</span>,
+    },
+    {
+      key: 'safety_stock',
+      header: '安全库存',
+      align: 'right',
+      sortable: true,
+      render: (s) => <span className="text-[var(--text-secondary)]">{fmt(s.safety_stock)}</span>,
+    },
+    {
+      key: 'suggested_replenishment',
+      header: '建议补货量',
+      align: 'right',
+      sortable: true,
+      render: (s) => <span className="font-semibold text-[var(--accent-primary)]">{fmt(s.suggested_replenishment)}</span>,
+    },
+    {
+      key: 'inventory_status',
+      header: '库存状态',
+      align: 'center',
+      sortable: true,
+      render: (s) => <InventoryStatusBadge status={s.inventory_status} />,
+    },
+    {
+      key: 'status',
+      header: '计算状态',
+      align: 'center',
+      sortable: true,
+      render: (s) => {
+        if (s.status === 'ready') return <span className="text-xs text-[var(--accent-secondary)]">就绪</span>;
+        return (
+          <span className="inline-flex rounded-full px-2 py-0.5 text-xs bg-[var(--status-low-bg)] text-[var(--accent-warning)]">
+            {s.status === 'insufficient_data' && '数据不足'}
+            {s.status === 'forecast_unavailable' && '预测不可用'}
+            {s.status === 'error' && '错误'}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'action',
+      header: '操作',
+      align: 'center',
+      fixed: true,
+      render: (s) => (
+        <div className="flex items-center justify-center gap-1">
+          <ReasonDrawer
+            productId={s.product_id}
+            category={s.category}
+            currentInventory={s.current_inventory}
+            inTransitInventory={s.in_transit_inventory}
+            leadTimeK={s.lead_time_k}
+            leadTimeKSource={s.lead_time_k_source}
+            forecastKTotal={s.forecast_k_total}
+            safetyStock={s.safety_stock}
+            suggestedReplenishment={s.suggested_replenishment}
+            inventoryStatus={s.inventory_status}
+            status={s.status}
+            message={s.message}
+          >
+            <Button variant="ghost" size="sm" className="h-8 px-2 text-[var(--accent-primary)]">
+              <Calculator className="w-3.5 h-3.5 mr-1" />
+              原因
+            </Button>
+          </ReasonDrawer>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8"
+            onClick={() => onOrderClick(s.product_id, s.suggested_replenishment)}
+            aria-label="去下单"
+            title="去下单"
+          >
+            <ShoppingCart className="w-3.5 h-3.5" />
+          </Button>
+          <Button asChild size="sm" variant="ghost" className="h-8 px-1">
+            <Link to={`/products/${s.product_id}`} data-product-id={s.product_id}>
+              详情
+              <ChevronRight className="w-3 h-3" />
+            </Link>
+          </Button>
+        </div>
+      ),
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-      {items.map((item) => (
-        <div
-          key={item.title}
-          style={{ ...cardStyle, padding: '16px', background: item.bg, border: item.border }}
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <item.icon className="w-5 h-5" style={{ color: item.color }} />
-            <span className="text-sm font-medium" style={{ color: item.color }}>{item.title}</span>
-          </div>
-          <p className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{item.value}</p>
-        </div>
-      ))}
+    <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-surface)] p-5">
+      <DataTable
+        columns={columns}
+        data={items}
+        rowKey={(item) => item.product_id}
+        skeletonRows={8}
+      />
     </div>
   );
 });
-
-interface ReplenishmentTableProps {
-  products: ReplenishmentSuggestion[];
-}
-
-const headers = ['排名', '商品信息', '当前库存', '库存状态', '7天预测', '总需求', '建议补货'];
-
-const ReplenishmentTable = memo(function ReplenishmentTable({ products }: ReplenishmentTableProps) {
-  return (
-    <div style={{ ...cardStyle, overflow: 'hidden' }}>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)' }}>
-              {headers.map((h) => (
-                <th
-                  key={h}
-                  className="py-4 px-4 font-medium text-left"
-                  style={{ color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {products.map((item, idx) => {
-              const st = invStyle(item);
-              const need = item.suggested_replenishment > 0;
-              return (
-                <tr
-                  key={item.product_id}
-                  className="group hover:bg-[var(--table-row-hover)]"
-                  style={{ borderBottom: '1px solid var(--border-subtle)' }}
-                >
-                  <td className="py-4 px-4">
-                    <span
-                      className="inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold"
-                      style={{ background: 'var(--status-normal-bg)', color: 'var(--accent-primary)' }}
-                    >
-                      {idx + 1}
-                    </span>
-                  </td>
-                  <td className="py-4 px-4">
-                    <div className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>{item.product_id}</div>
-                    <div className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>{item.category}</div>
-                  </td>
-                  <td className="py-4 px-4 text-center">
-                    <span className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{fmt(item.current_inventory)}</span>
-                  </td>
-                  <td className="py-4 px-4 text-center">
-                    <span
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
-                      style={{ background: st.bg, color: st.c }}
-                    >
-                      {st.label === '充足' && <CheckCircle className="w-3 h-3" />}
-                      {(st.label === '紧缺' || st.label === '偏低') && <AlertTriangle className="w-3 h-3" />}
-                      {st.label}
-                    </span>
-                  </td>
-                  <td className="py-4 px-4">
-                    <div className="flex justify-center">
-                      <MiniChart predictions={item.predicted_demand_7d} pid={item.product_id} />
-                    </div>
-                  </td>
-                  <td className="py-4 px-4 text-right">
-                    <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>{fmt(item.total_predicted_demand)}</span>
-                  </td>
-                  <td className="py-4 px-4 text-right">
-                    {need ? (
-                      <span
-                        className="inline-flex items-center gap-1 text-lg font-bold"
-                        style={{ color: 'var(--accent-warning)' }}
-                      >
-                        <Package className="w-4 h-4" /
-                        >+{fmtInt(item.suggested_replenishment)}
-                      </span>
-                    ) : (
-                      <span
-                        className="inline-flex items-center gap-1 text-sm font-medium"
-                        style={{ color: 'var(--accent-secondary)' }}
-                      >
-                        <CheckCircle className="w-4 h-4" /
-                        >库存充足
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-});
-
-// ─── 主组件 ──────────────────────────────────────────────
 
 export default function ReplenishmentPage() {
+  const { storeId, category, setProductId } = useAnalysis();
   const [stores, setStores] = useState<Store[]>([]);
-  const [storeId, setStoreId] = useState('S001');
-  const [data, setData] = useState<ReplenishmentData | null>(null);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<ReplenishmentSuggestion[]>([]);
+  const [context, setContext] = useState<AnalysisContext | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [orderItem, setOrderItem] = useState<{ productId: string; suggestedQuantity: number } | null>(null);
+  const staleRef = useRef(false);
+
+  const storeName = useMemo(
+    () => stores.find((s) => s.id === storeId)?.name || '',
+    [stores, storeId],
+  );
 
   useEffect(() => {
+    staleRef.current = false;
     const controller = new AbortController();
-    let stale = false;
 
     const load = async () => {
       setLoading(true);
       setError('');
       try {
-        const [s, d] = await Promise.all([
+        const [s, c, res] = await Promise.all([
           api.getStores(controller.signal),
-          api.getReplenishment(storeId, 1.2, controller.signal),
+          api.getCategories(controller.signal),
+          api.getReplenishment(storeId, category || undefined, controller.signal),
         ]);
-        if (stale) return;
+        if (staleRef.current) return;
         setStores(s);
-        setData(d);
+        setCategories(c);
+        setContext(res.context);
+        setSuggestions(res.data.suggestions);
       } catch (e: unknown) {
-        if (stale) return;
-        if ((e as Error)?.name !== 'AbortError') {
-          setError((e as Error)?.message || '加载失败');
+        if (staleRef.current) return;
+        if (!isAbortError(e)) {
+          setError(getErrorMessage(e));
         }
       } finally {
-        if (!stale) setLoading(false);
+        if (!staleRef.current) setLoading(false);
       }
     };
 
     load();
     return () => {
-      stale = true;
+      staleRef.current = true;
       controller.abort();
     };
-  }, [storeId, refreshKey]);
+  }, [storeId, category, refreshKey]);
+
+  const displayed = useMemo(() => {
+    const filtered = suggestions.filter((s) => {
+      if (quickFilter === 'pending') {
+        return s.suggested_replenishment > 0 || s.inventory_status === 'critical' || s.inventory_status === 'low';
+      }
+      return true;
+    });
+    return filtered.slice(0, REPLENISHMENT_DISPLAY_LIMIT);
+  }, [suggestions, quickFilter]);
+
+  const handleProductClick = (productId: string) => {
+    setProductId(productId);
+  };
+
+  const handleOrderClick = (productId: string, suggestedQuantity: number) => {
+    setOrderItem({ productId, suggestedQuantity });
+  };
+
+  const handleOrderClose = () => {
+    setOrderItem(null);
+  };
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <h2 className="text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>补货建议</h2>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-tertiary)' }}>基于历史数据预测的 Top 5 畅销品补货建议</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <StoreSelector stores={stores} selectedStore={storeId} onChange={setStoreId} />
-          <button
-            type="button"
-            onClick={() => setRefreshKey((k) => k + 1)}
-            className="p-2 rounded-lg transition-colors"
-            style={{ border: '1px solid var(--border-color)' }}
-            title="刷新"
-          >
-            <RefreshCw className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
-          </button>
-        </div>
-      </div>
+      {context && <TitleBlock storeName={storeName} context={context} />}
 
-      {loading && (
-        <div className="flex items-center justify-center py-20">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2" style={{ borderColor: 'var(--accent-primary)' }} />
-          <span className="ml-3 text-sm" style={{ color: 'var(--text-secondary)' }}>计算中...</span>
-        </div>
-      )}
-
-      {error && (
-        <div
-          className="rounded-xl p-4 mb-6"
-          style={{ background: 'var(--status-critical-bg)', border: '1px solid var(--status-bg-error)' }}
-        >
-          <p style={{ color: 'var(--accent-alert)' }}>{error}</p>
-        </div>
-      )}
-
-      {!loading && !error && data && (
-        <>
-          <SummaryCards data={data} />
-          <ReplenishmentTable products={data.top_5_products} />
-          <div
-            className="mt-6 rounded-xl p-4"
-            style={{ background: 'var(--card-surface)', border: '1px solid var(--border-color)' }}
-          >
-            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-              <strong style={{ color: 'var(--text-primary)' }}>计算说明:</strong>
-              {' '}建议补货量 = max(0, 预测7天总需求 × 安全系数({data.safety_factor}) - 当前库存)。预测基于近期均值、星期模式和趋势调整的集成算法。
-            </p>
+      <FilterBar
+        stores={stores}
+        categories={categories}
+        showTimeRange={false}
+        extra={
+          <div className="flex items-center gap-1.5 justify-self-end">
+            <span className="text-xs text-[var(--text-tertiary)] whitespace-nowrap">状态</span>
+            <div className="flex rounded-md p-0.5 bg-[var(--bg-primary)] border border-[var(--border-color)]">
+              {QUICK_FILTERS.map((o) => {
+                const active = quickFilter === o.key;
+                return (
+                  <button
+                    key={o.key}
+                    type="button"
+                    onClick={() => setQuickFilter(o.key)}
+                    className={`px-2.5 py-1 text-[11px] rounded transition-colors ${
+                      active
+                        ? 'bg-[var(--card-surface)] text-[var(--accent-primary)] font-medium shadow-sm'
+                        : 'bg-transparent text-[var(--text-tertiary)]'
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                );
+              })}
+            </div>
+            <span className="text-[11px] text-[var(--text-tertiary)]">
+              {displayed.length}/{suggestions.length}
+            </span>
           </div>
-        </>
-      )}
+        }
+      />
+
+      <DataState
+        status={loading ? 'loading' : error ? 'error' : 'ready'}
+        error={error}
+        onRetry={() => setRefreshKey((k) => k + 1)}
+      >
+        <SummaryCards suggestions={suggestions} />
+
+        <SuggestionTable
+          items={displayed}
+          onProductClick={handleProductClick}
+          onOrderClick={handleOrderClick}
+        />
+
+        <div className="mt-6 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-primary)] p-5">
+          <h4 className="text-sm font-semibold mb-2 text-[var(--text-primary)]">计算说明</h4>
+          <ul className="text-xs space-y-1 list-disc pl-4 text-[var(--text-secondary)]">
+            <li>提前期 K：通过库存平衡方程 MSE 估计，默认 fallback 为 2 天</li>
+            <li>在途库存：前 K-1 天 Units Ordered 之和</li>
+            <li>安全库存：2.33 × 滚动预测误差标准差 × √K</li>
+            <li>建议补货量 = ceil(max(0, 未来 K 天预测 + 安全库存 - 当前库存 - 在途库存))</li>
+          </ul>
+        </div>
+      </DataState>
+
+      <Dialog open={!!orderItem} onOpenChange={(open) => { if (!open) setOrderItem(null); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[var(--text-primary)]">
+              <ClipboardCheck className="w-5 h-5 text-[var(--accent-primary)]" />
+              补货下单
+            </DialogTitle>
+            <DialogDescription>
+              请核对补货依据并填写数量与到货日期
+            </DialogDescription>
+          </DialogHeader>
+          {orderItem && (
+            <OrderForm
+              storeId={storeId}
+              productId={orderItem.productId}
+              suggestedQuantity={orderItem.suggestedQuantity}
+              onClose={handleOrderClose}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
