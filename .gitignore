@@ -5,6 +5,7 @@
 screenshot*
 CLAUDE.md
 *.pyc
+*pyc
 *.csv
 # Node.js
 node_modules/
@@ -30,3 +31,6 @@ logs
 # IDE files
 .vscode/
 .idea/
+api/services/__pycache__/data_service.cpython-313.pyc
+api/services/__pycache__/forecast_service.cpython-313.pyc
+api/services/__pycache__/forecast_service.cpython-313.pyc
