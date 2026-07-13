@@ -8,6 +8,7 @@ CLAUDE.md
 *pyc
 *.csv
 **/.vite/
+.pytest_cache
 # Node.js
 node_modules/
 npm-debug.log*
