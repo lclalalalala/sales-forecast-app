@@ -1,0 +1,124 @@
+name: 构建桌面应用
+
+# 触发方式：
+#   1) 推送 v* 版本标签（如 v1.0.0）→ 自动构建三平台并发布到 GitHub Release
+#   2) Actions 页面手动触发（workflow_dispatch）→ 仅构建并上传 Artifact
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+# 同一 ref 的重复触发自动取消旧运行，节省额度
+concurrency:
+  group: build-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_NAME: 库存预测系统   # 与 desktop.spec 中的 name 保持一致
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "20"
+
+jobs:
+  build:
+    name: 构建 ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false          # 某一平台失败不影响其余平台继续
+      matrix:
+        include:
+          - os: windows-latest   # x86_64 Windows
+            target: windows-x64
+          - os: macos-14         # Apple Silicon (arm64)
+            target: macos-arm64
+          - os: macos-13         # Intel (x86_64)
+            target: macos-x64
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      # ── 前端：构建 app/dist（.env.production 注入 VITE_API_BASE_URL=/api）──
+      - name: 配置 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: 安装前端依赖并构建
+        working-directory: app
+        run: |
+          npm ci
+          npm run build
+
+      # ── 后端 + 打包：PyInstaller onedir ──
+      - name: 配置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-desktop.txt
+
+      - name: 安装打包依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-desktop.txt
+
+      - name: PyInstaller 打包
+        run: pyinstaller desktop.spec
+
+      # ── 冒烟自检：验证数据加载 + GUI 后端已正确打入 ──
+      - name: 无头自检 (macOS)
+        if: runner.os == 'macOS'
+        env:
+          DESKTOP_SELFTEST: "1"
+        run: |
+          "dist/${APP_NAME}.app/Contents/MacOS/${APP_NAME}"
+
+      - name: 无头自检 (Windows)
+        if: runner.os == 'Windows'
+        env:
+          DESKTOP_SELFTEST: "1"
+        run: |
+          & "dist/$env:APP_NAME/$env:APP_NAME.exe"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      # ── 打包产物为 zip ──
+      - name: 压缩产物 (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          # ditto 保留 .app 包结构与权限，优于 zip
+          ditto -c -k --keepParent "dist/${APP_NAME}.app" "${APP_NAME}-${{ matrix.target }}.zip"
+
+      - name: 压缩产物 (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          Compress-Archive -Path "dist/$env:APP_NAME" -DestinationPath "$env:APP_NAME-${{ matrix.target }}.zip"
+
+      - name: 上传 Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-${{ matrix.target }}
+          path: ${{ env.APP_NAME }}-${{ matrix.target }}.zip
+          retention-days: 90
+
+  # ── 发布：仅在推送 v* 标签时，把三平台 zip 附到 Release ──
+  release:
+    name: 发布 Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # 创建 Release / 上传附件需要写权限
+    steps:
+      - name: 下载全部 Artifact
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: 创建 / 更新 Release 并上传
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*.zip
+          generate_release_notes: true

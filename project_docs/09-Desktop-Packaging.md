@@ -86,7 +86,32 @@ REM 产物：dist\库存预测系统.exe
 
 macOS 参考体积：**约 69MB**（瘦身前 264MB）。若新增在线依赖，记得同步复核 `excludes`。
 
-## 6. 注意事项
+## 6. CI 自动构建（GitHub Actions）
+
+工作流：`.github/workflows/build-desktop.yml`。因 PyInstaller 不能交叉编译，用 matrix 在三种 runner 各自本地构建：
+
+| runner | 产物 | 覆盖机型 |
+|---|---|---|
+| `windows-latest` | `库存预测系统-windows-x64.zip` | Windows x64 |
+| `macos-14` | `库存预测系统-macos-arm64.zip` | Apple Silicon (M 系列) |
+| `macos-13` | `库存预测系统-macos-x64.zip` | Intel Mac |
+
+**触发方式**
+- 推送 `v*` 标签（如 `v1.0.0`）→ 三平台构建 + 自动发布到 GitHub Release；
+- Actions 页面手动 `Run workflow`（workflow_dispatch）→ 仅构建并上传 Artifact（保留 90 天）。
+
+**每个构建任务的步骤**：检出 → Node 构建 `app/dist` → Python 装 `requirements-desktop.txt` → `pyinstaller desktop.spec` → 无头自检（`DESKTOP_SELFTEST=1` 校验数据加载 + GUI 后端已打入）→ 压缩为 zip（macOS 用 `ditto` 保留 `.app` 结构与权限）→ 上传。
+
+**发布一个版本**：
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+# Actions 自动构建三平台并创建 Release v1.0.0，三个 zip 作为附件
+```
+
+> 依赖由 `pywebview` 按平台自动引入：macOS 拉 pyobjc（cocoa/WebKit），Windows 拉 pythonnet（EdgeChromium/WebView2，GitHub Windows runner 已内置 WebView2 运行时）。无需在 workflow 里额外声明。
+
+## 7. 注意事项
 
 - 新增需随包分发的资源目录时，在 `desktop.spec` 的 `datas` 中登记，并确保代码经 `resource_base()` 定位。
 - 后端新增蓝图/仓储且为运行时动态导入时，补进 `desktop.spec` 的 `hiddenimports`，防止被漏收集。
