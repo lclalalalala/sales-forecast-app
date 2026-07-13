@@ -80,9 +80,19 @@ jobs:
         if: runner.os == 'Windows'
         env:
           DESKTOP_SELFTEST: "1"
+        shell: pwsh
         run: |
-          & "dist/$env:APP_NAME/$env:APP_NAME.exe"
-          if ($LASTEXITCODE -ne 0) { exit 1 }
+          # windowed(exe console=False) 应用在 Windows 上退出码不可靠：
+          # 即便进程内 os._exit(0)，PowerShell 拿到的 $LASTEXITCODE 仍可能为 1。
+          # 故不依赖退出码，改为捕获自检输出并校验成功标记。
+          $out = & "dist/$env:APP_NAME/$env:APP_NAME.exe" 2>&1 | Out-String
+          Write-Host $out
+          if (($out -match 'gui_backend=ok') -and ($out -match 'data_loaded=True')) {
+            Write-Host "[selftest] Windows 自检通过"
+          } else {
+            Write-Error "[selftest] Windows 自检失败：未见 gui_backend=ok / data_loaded=True"
+            exit 1
+          }
 
       # ── 打包产物为 zip ──
       - name: 压缩产物 (macOS)
