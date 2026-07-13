@@ -1,8 +1,10 @@
 name: 构建桌面应用
 
 # 触发方式：
-#   1) 推送 v* 版本标签（如 v1.0.0）→ 自动构建三平台并发布到 GitHub Release
+#   1) 推送 v* 版本标签（如 v1.0.0）→ 构建 Windows + Apple Silicon 并发布到 GitHub Release
 #   2) Actions 页面手动触发（workflow_dispatch）→ 仅构建并上传 Artifact
+# 注：Intel Mac (macos-x64) 因 runner 排队慢，单独在 build-desktop-intel.yml 构建，
+#     完成后作为附件追加到同名 Release。
 on:
   push:
     tags:
@@ -31,8 +33,8 @@ jobs:
             target: windows-x64
           - os: macos-14         # Apple Silicon (arm64)
             target: macos-arm64
-          - os: macos-13         # Intel (x86_64)
-            target: macos-x64
+          # Intel Mac (macos-13) 单独拆到 build-desktop-intel.yml：
+          # 其 runner 排队时间极长，放在主 matrix 会拖累 Windows/Apple Silicon 出包。
 
     steps:
       - name: 检出代码
@@ -113,7 +115,8 @@ jobs:
           path: ${{ env.APP_NAME }}-${{ matrix.target }}.zip
           retention-days: 90
 
-  # ── 发布：仅在推送 v* 标签时，把三平台 zip 附到 Release ──
+  # ── 发布：仅在推送 v* 标签时，把 Windows + Apple Silicon zip 附到 Release ──
+  #     （Intel 包由 build-desktop-intel.yml 完成后追加，不覆盖此处附件）
   release:
     name: 发布 Release
     needs: build

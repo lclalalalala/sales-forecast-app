@@ -1,0 +1,101 @@
+name: 构建桌面应用 (Intel Mac)
+
+# Intel Mac (macos-13) 的托管 runner 排队时间极长，单独成一条流水线，
+# 避免拖累主构建（Windows + Apple Silicon）出包与发布。
+#
+# 与主 workflow 用相同的 v* 标签触发：
+#   - 主流水线先构建 Windows + Apple Silicon 并创建/更新 Release；
+#   - 本流水线的 Intel 包构建完成后，作为附件“追加”到同名 Release（不覆盖已有附件）。
+# 若 Intel runner 长时间排不到，也只影响这一条流水线，Release 已先带另两个包。
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+concurrency:
+  group: build-desktop-intel-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_NAME: 库存预测系统   # 与 desktop.spec 中的 name 保持一致
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "20"
+
+jobs:
+  build:
+    name: 构建 macos-x64
+    runs-on: macos-13   # Intel (x86_64)
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      # ── 前端：构建 app/dist（.env.production 注入 VITE_API_BASE_URL=/api）──
+      - name: 配置 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: 安装前端依赖并构建
+        working-directory: app
+        run: |
+          npm ci
+          npm run build
+
+      # ── 后端 + 打包：PyInstaller onedir ──
+      - name: 配置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-desktop.txt
+
+      - name: 安装打包依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-desktop.txt
+
+      - name: PyInstaller 打包
+        run: pyinstaller desktop.spec
+
+      # ── 冒烟自检：验证数据加载 + GUI 后端已正确打入 ──
+      - name: 无头自检 (macOS)
+        env:
+          DESKTOP_SELFTEST: "1"
+        run: |
+          "dist/${APP_NAME}.app/Contents/MacOS/${APP_NAME}"
+
+      # ── 打包产物为 zip（ditto 保留 .app 结构与权限）──
+      - name: 压缩产物 (macOS)
+        run: |
+          ditto -c -k --keepParent "dist/${APP_NAME}.app" "${APP_NAME}-macos-x64.zip"
+
+      - name: 上传 Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-macos-x64
+          path: ${{ env.APP_NAME }}-macos-x64.zip
+          retention-days: 90
+
+  # ── 追加发布：把 Intel 包附到同名 Release（不动其余附件/说明）──
+  release:
+    name: 追加到 Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 下载 Artifact
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      # softprops/action-gh-release 对已存在的 Release 只“新增/更新”所给附件，
+      # 不删除其他附件；此处不设 body/generate_release_notes，避免覆盖主流水线写入的说明。
+      - name: 追加 Intel 包到同名 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*.zip
