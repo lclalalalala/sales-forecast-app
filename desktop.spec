@@ -14,6 +14,7 @@ PyInstaller 打包配置 - desktop.spec
 """
 
 import os
+import sys
 
 from PyInstaller.utils.hooks import collect_submodules
 
@@ -30,17 +31,22 @@ datas = [
 pathex = [os.path.join(ROOT, "api")]
 
 # pywebview 在运行时惰性 import webview.platforms.<backend>（见 webview/guilib.py），
-# 静态分析跟不到，须显式收集所有子模块；macOS 后端(cocoa)另需 pyobjc 框架。
+# 静态分析跟不到，须显式收集所有子模块。
 webview_hidden = collect_submodules("webview")
-pyobjc_hidden = [
-    "objc",
-    "Foundation",
-    "AppKit",
-    "WebKit",
-    "Quartz",
-    "CoreFoundation",
-    "PyObjCTools",
-]
+# macOS 后端(cocoa)依赖 pyobjc 框架，仅在 macOS 构建时收集；
+# 在 Windows 上这些模块不存在，声明会产生无害但扰人的 "Hidden import not found" 告警。
+if sys.platform == "darwin":
+    platform_hidden = [
+        "objc",
+        "Foundation",
+        "AppKit",
+        "WebKit",
+        "Quartz",
+        "CoreFoundation",
+        "PyObjCTools",
+    ]
+else:
+    platform_hidden = []
 
 # 蓝图与仓储多为运行时按需导入，显式声明以防被漏收集
 hiddenimports = [
@@ -55,7 +61,7 @@ hiddenimports = [
     "infrastructure.product_summary_repository",
     "infrastructure.sales_metrics_repository",
     "infrastructure.config_repository",
-] + webview_hidden + pyobjc_hidden
+] + webview_hidden + platform_hidden
 
 # 在线服务不依赖以下重库，排除以缩小体积：
 #   - sklearn/scipy/matplotlib：仅离线计算/绘图用
