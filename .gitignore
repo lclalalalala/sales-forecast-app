@@ -5,8 +5,7 @@
 screenshot*
 CLAUDE.md
 *.pyc
-*pyc
-*.csv
+**pyc
 **/.vite/
 .pytest_cache
 __pycache__
