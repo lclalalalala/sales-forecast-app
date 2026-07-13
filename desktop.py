@@ -101,7 +101,11 @@ def main() -> int:
             f"stores={data.get('stores_count')} products={data.get('products_count')} "
             f"gui_backend={'ok' if gui_ok else 'FAIL ' + gui_msg}\n"
         )
-        return 0 if (ok and gui_ok) else 1
+        sys.stdout.flush()
+        # Flask 跑在守护线程里；解释器正常退出时 werkzeug/守护线程在 teardown 阶段
+        # 会污染退出码（Windows 上表现为“打印成功却 exit 1”）。用 os._exit 以明确
+        # 退出码立即结束，跳过 finalizer 与线程收尾，避免自检假失败。
+        os._exit(0 if (ok and gui_ok) else 1)
 
     url = f"http://{HOST}:{port}/"
 
