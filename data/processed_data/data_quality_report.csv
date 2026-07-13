@@ -1,0 +1,2 @@
+data_version,row_count,store_count,product_count,date_start,date_end,duplicate_count,null_count,negative_value_count,inventory_balance_error_count,status,calculated_at
+v1,76000,5,20,2022-01-01 00:00:00,2024-01-30 00:00:00,0,0,0,28831,pass,2026-07-13T07:06:13.143026

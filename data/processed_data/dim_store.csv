@@ -1,0 +1,6 @@
+store_id,store_name,region,is_active
+S001,门店 S001,North,True
+S002,门店 S002,South,True
+S003,门店 S003,East,True
+S004,门店 S004,West,True
+S005,门店 S005,North,True
